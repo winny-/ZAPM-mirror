@@ -834,7 +834,7 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
                                 break;
                             }
                             if (isHero () && f->isLockedDoor ()) {
-                                shootLock (weapon, attack, f);
+                                shootLock (weapon, attack, f, 0);
                             }
                             break;
                         default:
@@ -1611,7 +1611,7 @@ shObject::impact (shFeature *f, shDirection dir, shCreature *thrower)
 
 void
 shCreature::shootLock (shObject *weapon, shAttack *attack,
-                       shFeature *door)
+                       shFeature *door, int attackmod)
 {
     if (!isHero ())
         return;
@@ -1621,10 +1621,14 @@ shCreature::shootLock (shObject *weapon, shAttack *attack,
     {
         int score = 
             sportingD20 () + 4 + 
-            getWeaponSkillModifier(weapon->mIlk) + 
             attack->mDamage[0].mNumDice * 
             attack->mDamage[0].mDieSides + 
+            attackmod + 
             door->mSportingChance;
+
+        if (weapon)
+            score += getWeaponSkillModifier(weapon->mIlk);
+
         door->mSportingChance += RNG (2, 6);
                 
         /* FIXME: I don't like the 
@@ -1657,7 +1661,8 @@ shCreature::shootLock (shObject *weapon, shAttack *attack,
  */
 int
 shMapLevel::areaEffectFeature (shAttack *atk, shObject *weapon, int x, int y,
-                               shCreature *attacker, int dbonus /* = 0 */)
+                               shCreature *attacker, 
+                               int attackmod, int dbonus /* = 0 */)
 {
     shFeature *f = getFeature (x, y);
     int destroy = 0;
@@ -1684,7 +1689,7 @@ shMapLevel::areaEffectFeature (shAttack *atk, shObject *weapon, int x, int y,
             (kLaser == atk->mDamage[0].mEnergy || 
              kForce == atk->mDamage[0].mEnergy))
         {
-            attacker->shootLock (weapon, atk, f);
+            attacker->shootLock (weapon, atk, f, attackmod);
         }
         switch (atk->mType) {
         case shAttack::kDisintegrationRay:
@@ -2104,7 +2109,8 @@ shMapLevel::areaEffect (shAttack *atk, shObject *weapon, int x, int y,
                 continue;
             }
 
-            res = areaEffectFeature (atk, weapon, x, y, attacker, dbonus);
+            res = areaEffectFeature (atk, weapon, x, y, attacker, 
+                                     attackmod, dbonus);
             if (res < 0) {
                 /* reflect it */
                 dir = reflectBackDir (dir);
@@ -2178,7 +2184,8 @@ shMapLevel::areaEffect (shAttack *atk, shObject *weapon, int x, int y,
                         draw ();
                         seen++;
                     }
-                    areaEffectFeature (atk, weapon, u, v, attacker, dbonus);
+                    areaEffectFeature (atk, weapon, u, v, attacker, 
+                                       attackmod, dbonus);
                 }
             }
         }
@@ -2189,7 +2196,7 @@ shMapLevel::areaEffect (shAttack *atk, shObject *weapon, int x, int y,
                     && existsLOS (x, y, u, v)) 
                 {
                     if (-2 == areaEffectCreature (atk, weapon, u, v, attacker, 
-                                                  dbonus)) 
+                                                  attackmod, dbonus)) 
                     {
                         died = -2;
                     }

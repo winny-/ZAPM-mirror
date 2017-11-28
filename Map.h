@@ -800,7 +800,8 @@ public:
                     int attackmod, int dbonus = 0);
 
     int areaEffectFeature (shAttack *atk, shObject *weapon, int x, int y, 
-                           shCreature *attacker, int dbonus = 0);
+                           shCreature *attacker, 
+                           int attackmod, int dbonus = 0);
     int areaEffectCreature (shAttack *atk, shObject *weapon, int x, int y, 
                             shCreature *attacker, 
                             int attackmod, int dbonus = 0);
@@ -814,6 +815,7 @@ public:
     int moveCreature (shCreature *c, int x, int y);
     int putCreature (shCreature *c, int x, int y);
     int spawnMonsters ();
+    int spawnPrograms (int x, int y, int count);
     
     void makeNoise (int x, int y, int radius);
     void alertMonsters (int x, int y, int radius, int destx, int desty);

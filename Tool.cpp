@@ -178,7 +178,8 @@ makeRepair (shObject *tool)
         }
 
         if ((f = Level->getFeature (x, y))) {
-            if (shFeature::kDoorOpen == f->mType &&
+            if ((shFeature::kDoorOpen == f->mType || 
+                 shFeature::kDoorClosed == f->mType ) &&
                 shFeature::kBerserk & f->mDoor &&
                 !f->mTrapUnknown)
             {

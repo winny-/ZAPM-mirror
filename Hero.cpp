@@ -1222,6 +1222,7 @@ shHero::takeTurn ()
 
             if (Level->rememberedCreature (x, y) || 
                 (c && hasMotionDetection () && c->isMoving ()) ||
+                (c && hasTelepathy() && c->hasMind ()) ||
                 (c && !isBlind ())) 
             { /* this must be an attack */
                 if (glidemode) {

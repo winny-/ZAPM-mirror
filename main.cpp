@@ -58,7 +58,8 @@ main (int argc, char **argv)
     int g = 0, o = 0, d = 0;
 
     //FIXME: should probably stat() it and make sure it's a directory...
-    if (access (DataDir, O_RDWR)) {
+    //FIXME: access() doesn't work for setuid install
+    if (0 && access (DataDir, O_RDWR)) {
         fprintf (stderr, "Couldn't open \"%s\" directory: %s.\n", DataDir, strerror (errno));
         fprintf (stderr, "ZAPM needs this directory for saved games and other data.\n"
                  "Perhaps you were running it from a strange directory?\n");

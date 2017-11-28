@@ -30,7 +30,6 @@ int ColorMap[22];
 shInterface::shInterface ()
 {
     int i;
-    int x, y;
     WINDOW *win;
 
     win = initscr ();
@@ -483,6 +482,9 @@ shInterface::initializeCommands ()
     /*debug commands */
     MAPKEY ('`', kGodMode);
 
+    for (i = 0; i < kMaxCommand; i++)
+        mCommandHelp[i] = "";
+
     mCommandHelp[kAdjust] = "Adjust inventory letters";
     mCommandHelp[kClose] = "Close a door";
     mCommandHelp[kDrop] = "Drop an item";
@@ -499,16 +501,6 @@ shInterface::initializeCommands ()
     mCommandHelp[kListInventory] = "Inventory List";
     mCommandHelp[kLookHere] = "Look at what is here";
     mCommandHelp[kLookThere] = "Look at a feature or monster";
-/*
-    mCommandHelp[kMoveN] = "";
-    mCommandHelp[kMoveNE] = "";
-    mCommandHelp[kMoveE] = "";
-    mCommandHelp[kMoveSE] = "";
-    mCommandHelp[kMoveS] = "";
-    mCommandHelp[kMoveSW] = "";
-    mCommandHelp[kMoveW] = "";
-    mCommandHelp[kMoveNW] = "";
-*/
 
     mCommandHelp[kMoveDown] = "Climb down stairs";
     mCommandHelp[kMoveUp] = "Climb up stairs";

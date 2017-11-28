@@ -10,16 +10,17 @@ RayGun.o Render.o Room.o SaveLoad.o Sewer.o SewerPlant.o Shop.o		\
 Skills.o Tombstone.o Tool.o Town.o TwistyRooms.o Util.o Vat.o Vision.o	\
 Weapon.o main.o
 
-ZAPMOWNER= games
+ZAPMOWNER= appowner
 GAMEDIR= "/usr/games"
 DATADIR= "/usr/games/lib/zapmdir"
 
-ARCH = -arch i386 -arch ppc
+#ARCH = -arch i386 -arch ppc
 
 LIBS= -lpanel -lcurses
 INCLUDE=
 LDFLAGS= -flat_namespace $(ARCH)
-CXX= c++
+CXX = c++
+#CXX= c++-4.0
 
 
 CXXFLAGS=-Wall -Wno-char-subscripts -O -g $(INCLUDE) $(ARCH)
@@ -33,7 +34,7 @@ install: zapm-multiuser
 	-chown $(ZAPMOWNER) $(DATADIR)
 	-chown $(ZAPMOWNER) $(GAMEDIR)/zapm
 	chmod 04755 $(GAMEDIR)/zapm
-	chmod 0755 $(DATADIR)
+	chmod 04755 $(DATADIR)
 
 zdebug: oneuser zapm
 	mkdir -p build
@@ -45,8 +46,8 @@ zapm-oneuser: oneuser zapm
 	mkdir -p build
 	mkdir -p build/zapm
 	mkdir -p build/zapm/user
-	strip zapm
 	cp zapm build/zapm/
+	strip build/zapm/zapm
 	cp docs/Guide.txt build/zapm
 	tar czf zapm.tar.gz -C build zapm
 

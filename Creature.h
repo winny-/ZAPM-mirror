@@ -379,7 +379,8 @@ class shCreature : public shThing
     int openDoor (int x, int y);
     int closeDoor (int x, int y);
 
-    void shootLock (shObject *weapon, shAttack *attack, shFeature *door);
+    void shootLock (shObject *weapon, shAttack *attack, shFeature *door, 
+                    int attackmod);
 
     virtual int numHands () { return 0; }
 

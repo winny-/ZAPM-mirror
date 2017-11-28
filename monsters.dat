@@ -343,6 +343,10 @@ space_elf_queen     E   Magenta       Humanoid   3  1   Medium  8  11  10  10  1
 ~                                                                                                                               TelepathyPower
 ~                                                                                                                               Regeneration
 ~                                                                                                                               Teleport
+#logic_bomb          b   Cyan          Program    1  1   Small   9  11  3   10  1   1   8   8   8   200   0    0  1  SitStill  0   SpawnPrograms   Concussive  3d6  1  1000
+#& Sessile
+#& Explosive
+#& NoTreasure
 #man_in_black       @   Blue          Humanoid   1  1d2 Medium  5  12  14  12  12  12  12  12  12  100   2    2  0  Wander   0   Punch     Concussive  1d6  1  1000
 #+                                                                                                                                pair of sunglasses
 alien_queen         A   BrightMagenta Alien      1  1   Large   12 13  25  16  12  10  18  15  10  100   1    0  5  Lurk     0   Claw      Slashing    1d8  3  500

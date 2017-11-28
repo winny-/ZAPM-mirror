@@ -104,6 +104,7 @@ shAttack::noun ()
     case kSlash: return "slash";
     case kSlime: return "slime";
     case kSmash: return "smacks";
+    case kSpawnPrograms: return "data burst";
     case kStab: return "stab";
     case kStasisRay: return "stasis ray";
     case kSting: return "sting";
@@ -174,5 +175,9 @@ shAttack AcidBloodAttack =
               kCorrosive, 2, 6);
 
 shAttack ExplodingMonsterAttack =
+    shAttack (NULL, shAttack::kBlast, shAttack::kBurst, 0,
+              kConcussive, 3, 6);
+
+shAttack BasicExplodingMonsterAttack =
     shAttack (NULL, shAttack::kBlast, shAttack::kBurst, 0,
               kConcussive, 3, 6);

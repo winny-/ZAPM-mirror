@@ -107,6 +107,7 @@ struct shAttack
         kSlash,
         kSlime,
         kSmash,
+        kSpawnPrograms,
         kStab,
         kStasisRay,
         kSting,
@@ -197,4 +198,6 @@ extern shAttack OpticBlastAttack;
 extern shAttack WebAttak;
 extern shAttack AcidBloodAttack;
 extern shAttack ExplodingMonsterAttack;
+extern shAttack BasicExplodingMonsterAttack;
+
 #endif

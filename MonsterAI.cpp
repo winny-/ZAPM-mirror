@@ -538,6 +538,9 @@ shMonster::doAttack (shCreature *target, int *elapsed)
             }
             die (kSlain, NULL);
             return -2;
+        } else if (shAttack::kSpawnPrograms == atk->mType) {
+            die (kSlain, NULL);
+            return -2;
         }
         return meleeAttack (mWeapon, atk, target->mX, target->mY);
     }
@@ -633,7 +636,6 @@ shMonster::doWander ()
             I->debug ("  alerting monsters near %d %d", mX, mY);
         }
 
-
         res = readyWeapon ();
         if (-1 != res) {
             return res;
@@ -659,6 +661,7 @@ shMonster::doWander ()
                 }
             }
             hasrangedweapon = 1;
+            val_adjacent = 0;
         }
         
         if (mWeapon && !mWeapon->isMeleeWeapon ()) {
@@ -775,6 +778,7 @@ shMonster::doWander ()
                 val_far = 1;
                 val_linedup = -5;
                 val_htrack = -3;
+                val_adjacent = -30;
             } else {
                 val_adjacent = 30;
                 val_near = -1;
@@ -1328,12 +1332,20 @@ shMonster::takeTurn ()
 
     if (isAsleep ()) {
         elapsed = FULLTURN;
+    } else if (isParalyzed ()) {
+        elapsed = NDX (2, 6) * 100;
     } else if (isTrapped ()) {
+        if (shMonster::kSitStill != mStrategy &&
+            shMonster::kHatch != mStrategy) 
+        {
+            --mTrapped;
+        }
         /* FIXME: should still be able to attack adjacent hero sometimes */
         if (Hero.canSee (this)) {
             shFeature *f = mLevel->getFeature (mX, mY);
-            if (f) f->mTrapUnknown = 0;
-            if (shMonster::kSitStill != mStrategy && 0 == --mTrapped) {
+            if (f)
+                f->mTrapUnknown = 0;
+            if (!mTrapped) {
                 if (f) {
                     switch (f->mType) {
                     case shFeature::kPit:
@@ -1359,7 +1371,9 @@ shMonster::takeTurn ()
     } else if (isStunned () || 
                (isConfused () && RNG (2))) 
     {
-        if (shMonster::kSitStill == mStrategy) {
+        if (shMonster::kSitStill == mStrategy || 
+            shMonster::kHatch == mStrategy) 
+        {
             /* do nothing */
             elapsed = FULLTURN;
         } else {
@@ -1367,8 +1381,6 @@ shMonster::takeTurn ()
             shDirection dir = (shDirection) RNG (8);
             elapsed = doMove (dir);
         }
-    } else if (isParalyzed ()) {
-        elapsed = NDX (2, 6) * 100;
     } else if (-1 != mEnemyX) {
         elapsed = doRetaliate ();
     } else {

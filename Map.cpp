@@ -1080,7 +1080,8 @@ shMapLevel::checkDoors (int x, int y)
             } else {
                 if (isOccupied (x, y)) {
                     if (shFeature::kDoorClosed == f->mType && 
-                        shFeature::kAutomatic & f->mDoor)
+                        shFeature::kAutomatic & f->mDoor &&
+                        !f->isLockedDoor())
                     {
                         f->mType = shFeature::kDoorOpen;
                         /*
@@ -1344,6 +1345,30 @@ shMapLevel::spawnMonsters ()
     }
 
     return res;
+}
+
+
+int
+shMapLevel::spawnPrograms (int x, int y, int count)
+{
+    while (count--) {
+        shMonsterIlk *ilk;
+        shMonster *mon;
+        int x1 = x;
+        int y1 = y;
+
+        do {
+            ilk = pickAMonsterIlk (RNG (mDLevel));
+        } while (!ilk || kProgram != ilk->mType);
+        if (isOccupied (x1, y1) && findNearbyUnoccupiedSquare (&x1, &y1))
+            return -1;
+        mon = new shMonster (ilk);
+        if (putCreature (mon, x1, y1)) {
+            //FIXME: leaking the monster here
+        }
+        
+    }
+    return 0;
 }
 
 

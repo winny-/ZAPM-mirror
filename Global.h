@@ -16,7 +16,7 @@ third number:  incremented with bug fix releases that don't affect gameplay
 
 **************************************************************************/
 
-#define ZAPM_VERSION "0.8.2"
+#define ZAPM_VERSION "0.8.3"
 
 #define SH_DEBUG
 

@@ -85,8 +85,11 @@ shHero::epitaph (char *buf, int len, shCauseOfDeath how, const char *killer)
     switch (how) {
     case kSlain:
     case kKilled:
-      if (killer && !strcasecmp (killer, "a dalek")) 
+        if (killer && !strcasecmp (killer, "a dalek")) 
             snprintf (buf, len, "Exterminated by %s", killer);
+        else if (killer && (!strcasecmp (killer, "a low ping bastard") ||
+                            !strcasecmp (killer, "a high ping bastard")))
+            snprintf (buf, len, "Pwned by %s", killer);
         else 
             snprintf (buf, len, "Killed by %s", killer ? killer : "a monster");
         break;

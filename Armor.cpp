@@ -200,15 +200,15 @@ initializeArmor ()
                     kIdentified | kEnhanceable, 10000, kMedium, 20, 10, -2,
                     4, kNoEnergy, 0, 7500, 10, 400, 25);
 
-    new shArmorIlk ("aquamarine power armor", "suit of armor", 
-                    "aqua mechanical armor", 
+    new shArmorIlk ("suit of aquamarine power armor", "suit of armor", 
+                    "suit of aqua mechanical armor", 
                     kBrightCyan, shBodyArmor, kPlasteel,
                     kIdentified | kEnhanceable | kPowered, 
                     15000, kMedium, 25, 15, -2,
                     7, kNoEnergy, 0, 10000, 0, 1500, 10);
 
-    new shArmorIlk ("mean green power armor", "suit of armor", 
-                    "green mechanical armor", 
+    new shArmorIlk ("suit of mean green power armor", "suit of armor", 
+                    "suit of green mechanical armor", 
                     kBrightGreen, shBodyArmor, kPlasteel,
                     kIdentified | kEnhanceable | kPowered, 
                     15000, kMedium, 25, 15, -2,

@@ -1242,8 +1242,21 @@ shCreature::die (shCauseOfDeath how, const char *killer)
 
 
     if (isExplosive () && kSlain == how) {
-        Level->areaEffect (&ExplodingMonsterAttack, NULL, mX, mY, 
-                           kOrigin, this, mCLevel);
+        shAttack *atk = mIlk->mAttacks.get (0);
+        if (atk && shAttack::kSpawnPrograms == atk->mType) {
+            Level->spawnPrograms (mX, mY, 8);
+        } else {
+            if (atk) {
+                /* Kludge */
+                ExplodingMonsterAttack.mDamage[0] = atk->mDamage[0];
+                ExplodingMonsterAttack.mDamage[1] = atk->mDamage[1];
+                Level->areaEffect (&ExplodingMonsterAttack, NULL, mX, mY, 
+                                   kOrigin, this, mCLevel);
+            } else {
+                Level->areaEffect (&BasicExplodingMonsterAttack, NULL, mX, mY, 
+                                   kOrigin, this, mCLevel);
+            }
+        }
     }
 
     return 1;

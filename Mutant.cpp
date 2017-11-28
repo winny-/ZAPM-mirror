@@ -60,7 +60,11 @@ int
 shCreature::digestion (shObject *obj)
 {
     if (isHero ()) {
-        I->p ("You devour %s.", YOUR (obj));
+        if (obj->isUnpaid())
+            I->p ("You devour %s.", THE (obj));
+        else 
+            I->p ("You devour %s.", YOUR (obj));
+        Hero.usedUpItem(obj, obj->mCount, "ate");
     } else {
         abort ();
     }
@@ -151,7 +155,7 @@ shCreature::shootWeb (shDirection dir)
 
 
     WebAttack.mDamage[0].mNumDice = mCLevel / 2 + 1 
-                                  + skill ? 2 * skill->mRanks : 0;
+                                  + (skill ? 2 * skill->mRanks : 0);
 
     attackmod = mBAB + mToHitModifier 
               + getSkillModifier (kMutantPower, kShootWebs);
@@ -396,7 +400,7 @@ shCreature::restoration ()
                 }
                 return 1;
             }
-            break;
+            break; /* why is this break here?  I think we should keep looping */
         }
     }
     if (helped) {
