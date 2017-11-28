@@ -1,0 +1,289 @@
+#  a  animated appliance application: flying toaster/toaster oven/microwave/stove/tandoor oven
+#  b  grid bug
+#  c  critter: tribble, crite 
+#  d  demon: pink horror, (imp?)
+#  e
+#  f  facehugger
+#  g  gray: gray
+#  h  humanoid: mutant human, redshirt, stormtrooper, high ping bastard, low ping bastard
+#  i  insect: giant cockroach, radbeetle, radspider, radscorpion
+#  j
+#  k  klingon: klingon, klingon captain, klingon commander
+#  l
+#  m
+#  n
+#  o  egg
+#  p  plant: man eating plant
+#  q  quadriped: mutant ninja turtle, killer rabbit
+#  r  recognizer
+#  s
+#  t  tomato or plant: killer tomato
+#  u
+#  v  virus
+#  w  worm: bore worm
+#  x  small bot/droid: catbot, dogbot, astromech droid, scrubbot
+#  y
+#  z
+#  A  big alien: alien warrior, alien queen
+#  B  bird: mynock
+#  C  cyborg: borg
+#  D  Dreadnaught: (reserved)
+#  E
+#  F  fungus: warp fungus, brain mold
+#  G  genestealer: genestealer
+#  H  giant: 50 ft woman, giant ape
+#  I  Invisible monster (reserved)
+#  J
+#  K
+#  L
+#  M  monolith: monolith
+#  N
+#  O  ork: ork, ork boss
+#  P  program: agent, *master control program
+#  Q
+#  R
+#  S  slime: tapioca pudding, vat slime
+#  T  troll: usenet troll
+#  U  Daemon: *cron daemon, *init daemon, *mail daemon, *http daemon, etc.
+#  V  Vampire:
+#  W
+#  X  large bot/droid: Cylon centurian, protocol droid, clerkbot, warbot, guardbot
+#  Y
+#  Z
+#  @  armored humanoid: troubleshooter, space marine
+
+#
+# Notes:
+# number of hands should only be non-zero for intelligent creatures that will actually use their hands to 
+# wield weapons or open doors (hence, alien warrior has 0 hands)
+#
+#
+#Name               Sym Color         Type       Pr #Ap Size    HD Lvl Str Con Agi Dex Int Wis Cha Speed #H AC Strategy Pcf Attack                     Pr AP
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+earthling           h   Red           Humanoid   0  1   Medium  1  2   10  10  10  10  10  10  10  100   2  0  Wander   0   Punch     Concussive  1d3  1  1000
+warp_fungus         F   Blue          Ooze       6  1   Small   1  0   3   13   1   1   1   1   1   100   0  0  Sessile  0   Slime     Corrosive   1d3  1  1500
+grid_bug            b   Red           Program    5  1d4 Small   1  0   5   10   8   8   3   9   -1  90    0  1  Lurk     0   Zap       Electrical  1d3  1  1500
+bore_worm           w   Brown         Insect     3  1d4 Tiny    1  0   5   8   6   8   3   10  10  80    0  0  Lurk     0   Bite      Piercing    1d3  1  1500
+tribble             c   Brown         Beast      1  1d4 Tiny    1  0   3   6   6   8   3   8   8   60    0  0  Lurk     0   Bite      Piercing    1d2  1  1500 
+@ Multiplier
+flying_toaster      a   Cyan          Program    2  2d4 Diminutive 1 1 8   8   8   8   3   8   -1  60    0  1  Wander   0   Smash     Concussive  1d4  1  1000
+@ Flying
+mynock              B   Brown         Beast      3  1d4 Small   1  1   5   6   6   10  4   10  10  80    0  0  Lurk     0   Bite      Piercing    1d2  1  1000
+@ Flying
+giant_cockroach     i   Brown         Insect     6  1d4 Small   1  1   8   13  8   8   3   10  6   50    0  1  Lurk     0   Bite      Piercing    1d4  1  500
+man_eating_plant    t   Magenta       Abberation 3  1   Medium  3  1   12  10  1   1   1   1   1   100   0  2  Sessile  0   Bite      Piercing    2d6  1  1200 Poisonous 1d3
+gray                g   Gray          Humanoid   3  1d4 Medium  1  1   6   8   8   14  14  10  10  100   2  0  Lurk     0   Punch     Concussive  1d3  1  1000
++                                                                                                                               anal probe
++                                                                                                                           50% d20 energy cells
+#flying_toaster_oven a   Blue          Program    2  1d4 Tiny    1  2   10  8   8   8   3   8   -1  70    0  1  Wander   0   Smash     Concussive  1d4  1  1000
+#@ Flying
+green_killer_tomato t   Green         Abberation 1  1d3 Small   1  2   8   8   10  4   1   10  4   100   0  0  Lurk     0   Smash     Concussive  1d4  1  1000 
+mutant_human        h   Magenta       Mutant     5  1   Medium  1  2   8   8   8   8   8   8   8   100   2  0  Lurk     0   Punch     Concussive  1d3  1  1000
+~                                                                                                                           Hypnosis
+~                                                                                                                           Regeneration
+gretchin            o   Green         Humanoid   6  1d4 Small   1  2   8   8   10  10  10  10  10  100   2  0  Wander   0   Punch     Concussive  1d3  1  1000
++                                                                                                                             10% pea shooter
++                                                                                                                           | 15% club
++                                                                                                                             80% 4d8 buckazoids
+tapioca_pudding     S   Gray          Ooze       3  1   Medium  4  2   14  10  5   5   3   10  1   -300  0  1  Lurk     0   Slime     Concussive  1d2  1  1000 Paralyzing 2d6
+catbot              x   Brown         Bot        2  1   Small   2  3   12  14  14  10  7   10  -1  100   0  3  Wander   50  Bite      Piercing    1d6  1  1000
+dogbot              x   Gray          Bot        2  1   Small   2  3   14  16  12  8   7   10  -1  100   0  3  Wander   50  Bite      Piercing    1d6  1  1000
+red_killer_tomato   t   Red           Abberation 2  1d3 Small   1  3   10  10  10  4   1   10  4   100   0  0  Lurk     0   Smash     Concussive  1d6  1  1000 
+redshirt            h   Red           Humanoid   6  1d3 Medium  1  3   10  10  8   6   8   8   8   100   2  0  Wander   0   Punch     Concussive  1d3  1  1000
++                                                                                                                             phaser
++                                                                                                                             4d20 energy cells
++                                                                                                                             5% tricorder
+ork                 O   BrightGreen   Humanoid   4  1d4 Medium  2  3   12  10  10  10  10  10  8   100   2  0  Wander   0   Punch     Concussive  1d4  2  1000
+                                                                                                                            Kick      Concussive  1d6  1  1000
++                                                                                                                             50% pistol
++                                                                                                                           , 3d10 bullets
++                                                                                                                           | 10% shotgun
++                                                                                                                           , 1d12 shotgun shells
++                                                                                                                           | 50% pea shooter
++                                                                                                                             1%  ray gun
+alien_egg           o   Brown         Egg        1  3d4 Tiny    1  3   1   1   1   1   1   1   1   100   0  0  Hatch    0
+vat_slime           S   Green         Ooze       2  1   Medium  3  3   10  10  6   6   3   10  1   -50   0  0  Lurk     0   Smash     Concussive  1d4  1  1000 Corrosive 1d6
+cylon_centurian     X   Cyan          Droid      4  1d4 Medium  2  3   10  10  8   6   5   10  10  80    2  2  Lurk     0   Punch     Concussive  1d4  1  1000
++                                                                                                                             laser pistol
++                                                                                                                             4d20 energy cells
+#Name               Sym Color         Type       Pr #Ap Size    HD Lvl Str Con Agi Dex Int Wis Cha Speed #H AC Strategy Pcf Attack                     Pr AP
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+stormtrooper        h   White         Humanoid   6  1d6 Medium  1  4   10  10  10  6   8   10  10  100   2  0  Lurk     0   Punch     Concussive  1d3  1  1000
++                                                                                                                             stormtrooper suit
++                                                                                                                             stormtrooper helmet
++                                                                                                                             blaster
++                                                                                                                             4d20 energy cells
+astromech_droid     x   BrightBlue    Droid      1  1   Small   3  4   12  10  8   14  10  10  -1  80    1  3  Wander   80  Zap       Electrical  1d8  1  1000
+protocol_droid      X   Yellow        Droid      1  1   Medium  3  4   12  10  8   8   10  10  -1  80    2  3  Wander   80  Punch     Concussive  1d6  1  1000
+scrubbot            x   Green         Bot        1  1   Medium  3  4   14  10  10  10  3   10  -1  100   0  4  Wander   80  Smash     Concussive  1d6  1  1000
+crite               c   Blue          Vermin     2  1d6 Small   2  4   10  13  10  6   9   10  8   100   0  2  Lurk     0   Bite      Piercing    1d6  3  1000
+                                                                                                                            Quill     Piercing    1d2  1  1000 Poisonous 1d2
+#chestburster       A   Green         Alien      0  1   Tiny    2  4   12  12  12  10  6   10  8   125   0  1  Wander   0
+high_ping_bastard   h   Green         Humanoid   4  1d2 Medium  2  4   10  10  8   8   8   8   8   60    2  0  Lurk     0   Punch     Concussive  1d4  1  1000
++                                                                                                                             flak jacket
++                                                                                                                             90% shotgun
++                                                                                                                             , 1d12 shotgun shells
++                                                                                                                             | pea shooter
+creeping_credits    $   Red           Construct  2  1   Tiny    3  4   10  10  8   10  10  10  10  100   0  2  Hide     0   Touch     CreditDraining 2d100 1 1000
++                                                                                                                             4d100 buckazoids
+#flying_microwave    a   Yellow        Program    2  1d4 Small   2  4   12  8   8   8   3   8   -1  100   0  1  Wander   0   Cook      Burning     1d6  1  1000
+#@ Flying
+klingon             k   Brown         Humanoid   6  1d3 Medium  3  5   14  14  10  10  10  10  7   100   2  0  Lurk     0   Punch     Concussive  1d6  1  1000
++                                                                                                                             flak jacket
++                                                                                                                             20% batleth
++                                                                                                                           | phaser
++                                                                                                                           , 3d20 energy cells
+troubleshooter      @   Red           Humanoid   2  1d4 Medium  2  5   10  10  10  10  10  10  12  100   2  0  Lurk     0   Punch     Concussive  1d3  1  1000
++                                                                                                                             75% suit of reflec armor
++                                                                                                                             75% buggy laser pistol
++                                                                                                                           | laser pistol
++                                                                                                                             4d20 energy cells
++                                                                                                                             10% buggy ray gun
++                                                                                                                             5% ray gun
++                                                                                                                             2% buggy motion tracker
+borg                C   BrightBlue    Cyborg     2  1d4 Medium  2  5   14  14  8   12  6   10  6   80    2  1  Lurk     0   Punch     Concussive  1d6  1  1000
++                                                                                                                             phaser
++                                                                                                                             3d20 energy cells
+facehugger          f   Brown         Alien      1  1   Tiny    1  5   12  12  8   10  6   10  8   100   0  0  Wander   0   FaceHug   FaceHugging 0    1  1000
+radbeetle           i   Green         Insect     3  1d3 Medium  3  5   14  12  8   8   3   10  10  100   0  2  Lurk     0   Bite      Piercing    1d6  1  1000 Poisonous 1d2
+ork_boss            O   Red           Humanoid   3  1d4 Medium  4  5   14  12  10  10  12  10  10  100   2  0  Lurk     0   Punch     Concussive  1d6  1  1000
++                                                                                                                             flak jacket
++                                                                                                                             30% shotgun
++                                                                                                                           , 3d12 shotgun shells
++                                                                                                                           | laser rifle
++                                                                                                                           , 4d20 energy cells
++                                                                                                                             10% ray gun
+#sexbot              X   Magenta       Droid      1  1   Medium  4  6   10  10  10  10  10  10  14  100   2  3  Lurk     20%  
+#
+#
+#Name               Sym Color         Type       Pr #Ap Size    HD Lvl Str Con Agi Dex Int Wis Cha Speed #H AC Strategy Pcf Attack                     Pr AP
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#sentry_cannon      x   Cyan          Bot        0  2   Small   1  5   10  10  10  12  3   10  -1  100   0  6  Lurk     0   Bullet    Piercing    3d8  1  500
+recognizer          r   BrightBlue    Program    1  1d2 Large   8  6   14  12  10   8  3   10  -1  100   0  4  Wander   0   Smash     Concussive  3d6  1  1000
+@ Flying
+radspider           i   Red           Insect     4  1   Medium  4  6   16  12  10   8  3   10  10  100   0  2  Lurk     0   Bite      Piercing    1d6  1  1000 Poisonous 1d4
+klingon_captain     k   Red           Humanoid   3  1   Medium  4  6   16  16  12  12  12  10  7   100   2  0  Wander   0   Punch     Concussive  1d4  1  1000
++                                                                                                                             flak jacket
++                                                                                                                             30% batleth
++                                                                                                                             phaser
++                                                                                                                             3d20 energy cells
++                                                                                                                             15% ray gun
+pink_horror         d   BrightMagenta Abberation 3  1d3 Medium  6  6   18  12  10  8   3   10  10  100   0  2  Lurk     0   Bite      Piercing    2d8  1  1000
+brain_mold          F   Magenta       Ooze       2  1   Medium  4  6   10  10  6   6   3   10  14  100   0  0  Sessile  0   Slime     Corrosive   1d6  1  1500
+~                                                                                                                           MentalBlast
+~                                                                                                                           TelepathyPower
+#flying_stove        a   Red           Program    2  1d4 Large   4  6   12  10  8   8   3   8   -1  100   0  3  Wander   0   Cook      Burning     2d8  1  1000
+#@ Flying
+mutant_ninja_turtle q   Green         Mutant     2  1d4 Medium  4  7   16  14  16  12  10  12  14  100   2  3  Lurk     0   Kick      Concussive  1d6  1  1000
+                                                                                                                            Punch     Concussive  1d6  1  1000
++                                                                                                                             50% katana
++                                                                                                                             15% ray gun
+klingon_commander   k   Magenta       Humanoid   2  1   Medium  6  7   17  17  13  14  14  12  8   100   2  0  Wander   0   Punch     Concussive  1d4  1  1000
++                                                                                                                             +2 flak jacket
++                                                                                                                             30% +2 batleth
++                                                                                                                             +2 phaser
++                                                                                                                             3d20 energy cells
++                                                                                                                             25% ray gun
+usenet_troll        T   Gray          Humanoid   1  1   Medium  6  7   18  15  10  8   6   10  3   100   2  2  Wander   0   Punch     Concussive  2d6  2  1000
+                                                                                                                            HeadButt  Concussive  2d6  1  1000
+~                                                                                                                           Regeneration
++                                                                                                                             50% buggy computer
++                                                                                                                           | 50% computer
++                                                                                                                             60% floppy disk
++                                                                                                                             50% floppy disk
++                                                                                                                             40% floppy disk
++                                                                                                                             30% floppy disk
+radscorpion         i   Magenta       Insect     6  1d3 Large   5  7   16  12  10  8   3   10  10  100   0  3  Lurk     0   Claw      Slashing    1d4  3  1000
+                                                                                                                            Sting     Piercing    2d4  1  1000 Poisonous 1d6
+                                                                                                                            Bite      Piercing    1d4  1  1000
+low_ping_bastard    h   Cyan          Humanoid   4  1d2 Medium  4  7   10  10  10  15  10  10  10  125   2  0  Wander   0   Punch     Concussive  1d4  1  1000
++                                                                                                                             40% +2 flak jacket
++                                                                                                                           , 40% +1 flak jacket
++                                                                                                                           , 40% +3 flak jacket
++                                                                                                                           | flak jacket
++                                                                                                                             shotgun
++                                                                                                                             1d12 shotgun shells
++                                                                                                                             90% railgun
++                                                                                                                           , 1d12 railgun slugs
+ninja_cyborg        C   BrightBlue    Cyborg     1  1d3 Medium  4  8   15  13  14  16  12  14  6   125   2  1  Wander   0   Punch     Concussive  1d6  1  1000
++                                                                                                                             chameleon suit
++                                                                                                                             90% katana
++                                                                                                                            | light saber
+killer_rabbit       q   White         Beast      0  1   Small   6  8   18  12  20  10  14  10  10  250   0  0  Lurk     0   Punch     Concussive  1d6  2  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+~                                                                                                                           Regeneration
+~                                                                                                                           Terrify
+space_marine        @   White         Humanoid   4  1d5 Medium  5  8   16  16  12  18  14  10  10  100   2  0  Lurk     0   Punch     Concussive  1d4  1  1000
++                                                                                                                             pulse rifle
++                                                                                                                             8d10 bullets
++                                                                                                                             suit of power armor
++                                                                                                                             40% 4d10 energy cells
+alien_warrior       A   Red           Alien      6  1d4 Medium  5  8   22  12  12  10  14  10  10  100   0  4  Lurk      0  Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d6  1  1000
+@ AcidBlood
+#
+#
+#Name               Sym Color         Type       Pr #Ap Size    HD Lvl Str Con Agi Dex Int Wis Cha Speed #H AC Strategy Pcf Attack                     Pr AP
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+dark_gray           g   Gray          Humanoid   3  1d4 Medium  4  8   8   8   18  14  16  12  16  100   2  0  Lurk     0   Punch     Concussive  1d3  1  1000
++                                                                                                                               anal probe
++                                                                                                                           50% d20 energy cells
+~                                                                                                                           TelepathyPower
+~                                                                                                                           Hypnosis
+~                                                                                                                           Regeneration
+monolith            M   Black         Construct  0  1   Large   10 9   12  20  1   8   18  18  18  100   0  0  Sessile  100 Smash     Concussive  5d8  1  1000
+@ Scary
+~                                                                                                                           Terrify
+~                                                                                                                           Regeneration
+#flying_tandoor_oven a   Magenta       Program    2  1d4 Large   6  9   14  10  8   8   3   8   -1  100   0  5  Wander   0   Cook      Burning     3d8  1  1000
+#@ Flying
+#lawyer              L   Green         Humanoid   1  1   Medium  6  9   10  10  14  14  10  10  15  100   2  0  Wander   0   Cease     Paralyzing  2d6  500  10000
+#                                                                                                                            Seize     Seizing     1    500  2000
+#                                                                                                                            Sue       Suing       9d90 1000 1000
+#metroid             e   White         Abberation 3  1d3 Medium  6  10  10  12  8   10  10  10  10  100   0  3  Wander   0   Zap       Electrical  1d4  700  100
+clerkbot            X   White         Bot        0  1   Medium  10 10  16  10  10  10  10  10  12  125   2  5  ShopKeep 100 Zap       Electrical  2d6  1  1000  Stunning 1d6
++                                                                                                                             6d1000 buckazoids
++                                                                                                                             1d3 canisters of beer
++                                                                                                                             25% shield belt
++                                                                                                                           , 4d50 energy cells
+50_foot_woman       H   White         Mutant     1  1   Huge    10 11  30  12  10  6   10  10  12  100   0  2  Wander   0   Crush     Concussive  1d8  1  1000
+                                                                                                                            Kick      Concussive  1d8  2  1000
+#man_in_black       @   Blue          Humanoid   1  1d2 Medium  5  12  14  12  12  12  12  12  12  100   2  0  Wander   0   Punch     Concussive  1d6  1  1000
+#+                                                                                                                            pair of sunglasses
+alien_queen         A   Magenta       Alien      1  1   Large   12 13  25  16  12  10  18  10  10  100   0  5  Lurk     0   Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+                                                                                                                            TailSlap  Concussive  1d8  1  1000
+@ AcidBlood
+warbot              X   BrightRed     Bot        0  1   Medium  10 14  22  10  12  10  10  10  8   125   2  8  Lurk     100 Smash     Concussive  2d4  1  1000
++                                                                                                                             laser cannon
++                                                                                                                             400 energy cells
++                                                                                                                             ray gun
+guardbot            X   BrightYellow  Bot        0  1   Medium  10 14  22  10  12  10  10  10  8   125   2  8  Guard    100 Smash     Concussive  2d4  1  1000
++                                                                                                                             laser cannon
++                                                                                                                             400 energy cells
++                                                                                                                             80% ray gun
+giant_ape           H   Blue          Mutant     1  1   Huge    12 14  35  15  10   4  8   8   10  100   0  3  Wander   0   Punch     Concussive  1d6  4  1000
+                                                                                                                            Kick      Concussive  1d6  1  1000
+genestealer         G   Green         Beast      2  2d3 Medium  4  15  23  16  14  10  4   10  10  150   0  3  Wander   0   Claw      Slashing    1d8  1  1000
+#
+#
+#Name               Sym Color         Type       Pr #Ap Size    HD Lvl Str Con Agi Dex Int Wis Cha Speed #H AC Strategy Pcf Attack                     Pr AP
+#----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+mail_daemon         U   Green         Program    1  1   Large   10 16  25  16  14  14  10  15  10  150   0  7  Wander   0   Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+*                                                                                                                      BreatheViruses Sickening   6d6  3  1000
+bind_daemon         U   Yellow        Program    1  1   Large   10 16  25  16  14  14  10  15  10  150   0  7  Wander   0   Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+*                                                                                                                         BreatheBugs Bugging     6d6  3  1000
+nntp_daemon         U   Red           Program    1  1   Large   10 17  25  16  14  14  10  15  10  150   0  7  Wander   0   Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+*                                                                                                                         BreatheFire Burning     6d6  3  1000
+ftp_daemon          U   White         Program    1  1   Large   10 17  25  16  14  14  10  15  10  150   0  7  Wander   0   Claw      Slashing    1d8  3  1000
+                                                                                                                            Bite      Piercing    2d8  1  1000
+*                                                                                                                      BreatheTraffic Hosing      6d6  3  1000
+#cron_daemon         U   Blue          Program    1  1   Large   10 18  25  16  14  14  10  15  10  150   0  7  Wander   0   Claw      Slashing    1d8  3  1000
+#                                                                                                                            Bite      Piercing    2d8  1  1000
+#*                                                                                                                         BreatheTime TimeWarping 8d6  3  1000
+agent               P   Magenta       Program    1  1d3 Medium  20 22  40  14  40  14  18  10  10  300   2  0  Wander   0   Punch     Concussive  4d6  3  1000
+                                                                                                                            Punch     Concussive  1d6  3  1000
+                                                                                                                            Kick      Concussive  1d8  1  1000

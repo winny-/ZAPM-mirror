@@ -1,0 +1,27 @@
+"Monster","AttackType","EnType","dice","attacktime","recovertime","rechargetime","2 Energy","2 dice"
+"grid bug","Zap","Electrical","1d4",0,200,1800,,
+"mynock","Bite","Piercing","1d6",0,1000,1000,,
+"giant cockroach","Bite","Piercing","1d6",0,1000,1500,,
+"bore worm","Bite","Piercing","1d6",0,1000,1500,,
+"critter","Bite","Piercing","1d6",0,200,800,,
+"critter","Quill","Piercing","1d2",0,100,5000,"Poisonous","1d6"
+"sentry cannon","Bullet","Piercing","3d8",0,1000,500,,
+"radscorpion","Bite","Piercing","1d6",0,1000,1000,,
+"radscorpion","Claw","Slashing","1d8",0,500,500,,
+"radscorpion","Sting","Piercing","2d6",0,1200,1200,"Poisonous","2d6"
+"space slime","Smash","Concussive","1d4",0,1000,1000,"Corrosive","1d6"
+"mutant orphan","Punch","Concussive","1d6",0,600,1200,,
+"mutant orphan","Kick","Concussive","1d6",0,600,1200,,
+"dogbot","Bite","Piercing","1d8",0,800,800,,
+"flying toaster","Zap","Electrical","1d8",0,1200,2000,,
+"stormtrooper","Punch","Concussive","1d4",0,500,600,,
+"orc","Punch","Concussive","1d6",0,500,800,,
+"orc","Kick","Concussive","1d6",0,600,1200,,
+"goblin","Punch","Concussive","1d4",0,600,800,,
+"scrubbot","Smash","Concussive","2d6",0,1000,1000,,
+"facehugger","FaceHug","FaceHugging","1d6",0,1000,2000,,
+"chestburster","Bite","Piercing","1d6",0,1000,1000,,
+"alien warrior","Bite","Piercing","1d8",0,1000,1000,,
+"alien warrior","Claw","Slashing","1d8",0,500,500,,
+"alien queen","Bite","Piercing","1d8",0,1000,1000,,
+"alien queen","Claw","Slashing","2d6",0,500,500,,

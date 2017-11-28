@@ -1,0 +1,24 @@
+"Name","Symbol","Color","Type","Num Appearing","Size","HD","Lvl","Str","Con","Agi","Dex","Int","Wis","Cha","Move speed","# Hands","AC","Probability","Equipment","Intrinsics","Comments"
+"grid bug","x","Red","Bot","1d4","Small",1,0,5,6,8,8,3,9,-1,800,0,1,1,,,
+"mynock","B","Brown","Vermin","1d4","Small",1,1,5,6,6,10,4,10,10,1200,0,0,2,,,
+"giant cockroach","i","Brown","Insect","1d4","Small",1,1,8,13,8,8,3,10,6,1500,0,1,1,,,
+"bore worm","i","Brown","Insect","1d4","Tiny",1,0,5,6,6,8,3,10,10,1200,0,0,3,,,
+"critter","c","Brown","Vermin","1d6","Small",2,4,14,13,10,6,10,10,8,700,0,2,1,,,
+"green fungus","F","Green","Ooze","1","Small",1,0,3,9,1,1,1,1,1,10000,0,0,1,,"Immobile","has no attack"
+"sentry cannon","x","Cyan","Bot","2","Small",1,5,10,10,10,12,3,10,-1,0,0,6,0,,,
+"radscorpion","i","Red","Insect","1d4","Large",6,8,16,12,8,8,3,10,10,1000,0,3,1,,,
+"space slime","P","Green","Ooze","1","Medium",2,2,10,10,6,6,3,10,1,3000,0,0,2,,,
+"mutant orphan","h","BrightMagenta","Humanoid","1d4","Medium",1,2,8,8,8,8,8,8,8,1000,2,0,1,,,
+"dogbot","x","Gray","Bot","1","Small",2,2,14,10,12,8,3,10,-1,1000,0,3,2,,,
+"flying toaster","x","Cyan","Bot","2d4","Tiny",1,1,8,8,8,8,8,8,-1,1400,0,1,2,,,
+"stormtrooper","h","White","Humanoid","1d6","Medium",1,3,10,10,10,6,10,10,10,1000,2,0,1,"laser pistol; stormtrooper suit; stormtrooper helmet; 35 energy cells",,"terrible aim"
+"goblin","o","Green","Humanoid","1d4","Small",1,2,8,8,10,10,10,10,10,900,2,0,1,,,
+"orc","o","Green","Humanoid","1d4","Medium",2,3,12,10,10,10,10,10,8,1000,2,0,1,"club",,
+"orc","o","Green","Humanoid","1d4","Medium",2,4,12,10,10,10,10,10,8,1000,2,0,1,"pistol; 8 bullets; flak jacket",,
+"scrubbot","x","Green","Bot","1","Medium",3,3,14,10,10,10,3,10,-1,1000,0,4,2,,,
+"alien egg","%","Brown","Egg","2d6","Tiny",1,3,1,1,1,1,1,1,1,3000,0,0,3,,"Immobile",
+"facehugger","A","Brown","Beast","1","Tiny",1,5,12,12,12,10,6,10,8,750,0,0,2,,,
+"chestburster","A","Brown","Beast","1","Tiny",2,4,12,12,12,10,6,10,8,750,0,1,0,,,
+"alien warrior","A","Red","Beast","1d4","Medium",5,8,18,14,12,10,10,10,10,900,0,4,1,,,
+"alien queen","A","Magenta","Beast","1","Large",12,15,20,16,12,10,14,10,10,1100,0,4,3,,,"can lay eggs"
+"starship trooper","h","Green","Humanoid","1d6","Medium",2,5,10,10,10,10,10,10,10,1000,2,0,2,"pulse rifle; 24 bullets; flak jacket",,
