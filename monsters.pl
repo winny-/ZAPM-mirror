@@ -27,6 +27,9 @@ while ($_ = <MF>) {
     } elsif (/^\@/) {
 	/^\@\s+(\S+)/;
 	print "cur->addIntrinsic(k$1);\n";
+    } elsif (/^\&/) {
+	/^\&\s+(\S+)/;
+	print "cur->addFeat(k$1);\n";
     } elsif (/^\~/) {
 	/^\~\s+(\S+)/;
 	print "cur->addMutantPower(k$1);\n";
@@ -41,7 +44,7 @@ while ($_ = <MF>) {
     } else {
     	($name, $sym, $color, $type, $rarity, $numapp, $size, $hd, $lvl,
 	 $str, $con, $agi, $dex, $int, $wis, $cha, 
-	 $speed, $numhands, $ac, $strategy, $peaceful,
+	 $speed, $gender, $numhands, $ac, $strategy, $peaceful,
 	 $atktype, $entype, $damage, $prob, $rcov, $secen, $secdmg)
 	    = split;
 
@@ -57,7 +60,7 @@ while ($_ = <MF>) {
 	}
 	
 	print "cur = new shMonsterIlk (\"$name\", k$type, NULL, k$size, $hd, $lvl, ";
-	print "$str, $con, $agi, $dex, $int, $wis, $cha, $speed, $numhands, $ac, ";
+	print "$str, $con, $agi, $dex, $int, $wis, $cha, $speed, $gender, $numhands, $ac, ";
 	print "$nad, $nads, shMonster::k$strategy, $peaceful, $rarity, ";
 	print "'$sym', k$color);\n";
     }

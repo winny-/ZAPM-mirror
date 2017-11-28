@@ -22,38 +22,44 @@ initializeArmor ()
                     kIdentified | kEnhanceable, 400, kTiny, 20, 10, 0,
                     0, kNoEnergy, 0, 0, 0, 0, 0);
 
+    shArmorIlk *sth =
     new shArmorIlk ("stormtrooper helmet", "helmet", "plastic helmet", 
                     kWhite, 
                     shHelmet, kPlastic,
-                    kIdentified | kEnhanceable, 2000, kTiny, 20, 10, -1,
+                    kIdentified | kEnhanceable, 1000, kTiny, 20, 10, -1,
                     1, kNoEnergy, 0, 2000, 5, 50, 25);
-    
+    sth->mWornIntrinsics |= kAirSupply;
+    sth->mToHitModifier = -2;
+
+    shArmorIlk *sh = 
     new shArmorIlk ("space helmet", "helmet", "sealed helmet",
                     kWhite, shHelmet, kSteel,
-                    kIdentified | kEnhanceable, 1000, kTiny, 20, 10, -1,
+                    kIdentified | kEnhanceable, 2000, kTiny, 20, 10, -1,
                     1, kNoEnergy, 20, 2000, 5, 100, 25);
+    sh->mWornIntrinsics |= kAirSupply;
+
 
     new shArmorIlk ("football helmet", "helmet", "padded helmet", 
                     kRed, shHelmet, kSteel,
-                    kEnhanceable, 400, kTiny, 20, 10, 0,
+                    kEnhanceable, 4000, kTiny, 20, 10, 0,
                     1, kNoEnergy, 0, 1500, 5, 25, 3);
 
-    new shArmorIlk ("psionic helmet", "helmet", "ornate helmet", 
-                    kRed, shHelmet, kSteel,
-                    kEnhanceable, 400, kTiny, 20, 10, 4,
+    new shArmorIlk ("energy dome", "helmet", "flowerpot", 
+                    kRed, shHelmet, kPlastic,
+                    kEnhanceable, 25, kTiny, 20, 10, 4,
                     1, kNoEnergy, 0, 1500, 5, 25, 5);
 
     shArmorIlk *brainshield = 
     new shArmorIlk ("brain shield", "hat", "tinfoil hat", 
                     kRed, shHelmet, kSteel,
-                    kEnhanceable, 400, kTiny, 20, 10, -20,
+                    kEnhanceable, 25, kTiny, 20, 10, -20,
                     0, kNoEnergy, 0, 1500, 5, 25, 5);
-    brainshield->mInUseIntrinsics |= kReflection;
-    brainshield->mInUseIntrinsics |= kBrainShielded;
+    brainshield->mWornIntrinsics |= kReflection;
+    brainshield->mWornIntrinsics |= kBrainShielded;
 
     shGoggles = 
     new shArmorIlk ("goggles", "goggles", "goggles", kGray, NULL, kSteel,
-                    kIdentified, 400, kTiny, 20, 10, 0, 
+                    kIdentified, 50, kTiny, 20, 10, 0, 
                     0, kNoEnergy, 0, 0, 0, 0, 0);
 
     new shArmorIlk ("pair of sunglasses", "pair of goggles", 
@@ -68,14 +74,14 @@ initializeArmor ()
                     kYellow, shGoggles, kPlastic,
                     kUsuallyBuggy, 50, kTiny, 5, 1, 0,
                     0, kBlinding, 100, 500, 0, 50, 10);
-    pss->mInUseIntrinsics |= kPerilSensing;
+    pss->mWornIntrinsics |= kPerilSensing;
 
     shArmorIlk *blindfold =
     new shArmorIlk ("blindfold", "blindfold", "blindfold",
                     kBrightBlue, shGoggles, kCloth,
                     0, 50, kTiny, 20, 5, 0, 
                     0, kBlinding, 100, 500, 0, 50, 10);
-    blindfold->mInUseIntrinsics |= kBlind;
+    blindfold->mWornIntrinsics |= kBlind;
 
     shArmorIlk *xraygoggles =
     new shArmorIlk ("pair of x-ray goggles", "pair of goggles", 
@@ -83,14 +89,24 @@ initializeArmor ()
                     kRed, shGoggles, kCloth,
                     0, 50, kTiny, 20, 5, 0,
                     0, kBlinding, 100, 500, 0, 100, 5);
-    xraygoggles->mInUseIntrinsics |= kXRayVision;
+    xraygoggles->mWornIntrinsics |= kXRayVision;
 
-    new shArmorIlk ("pair of targetter goggles", "pair of goggles", 
+    shArmorIlk *targeter =
+    new shArmorIlk ("pair of targeter goggles", "pair of goggles", 
                     "pair of goggles",
                     kRed, shGoggles, kCloth,
                     0, 50, kTiny, 20, 5, 0,
                     0, kBlinding, 100, 500, 0, 100, 5);
-    /* grants +2 attack and +2 damage bonus to ranged weapons - see Fight.cpp */
+    targeter->mToHitModifier = 2;
+    targeter->mDamageModifier = 2;
+
+    shArmorIlk *infragoggles =
+    new shArmorIlk ("pair of night vision goggles", "pair of goggles", 
+                    "pair of goggles",
+                    kRed, shGoggles, kCloth,
+                    0, 50, kTiny, 20, 5, 0,
+                    0, kNoEnergy, 100, 500, 0, 100, 5);
+    infragoggles->mWornIntrinsics |= kNightVision;
 
     shBelt = 
     new shArmorIlk ("belt", "belt", "belt", kGray, NULL, kSteel,
@@ -103,7 +119,7 @@ initializeArmor ()
                     0, 100, kTiny, 5, 1, 0,
                     0, kNoEnergy, 0, 500, 0, 300, 10);
     n++;
-    shieldbelt->mInUseIntrinsics |= kShielded;
+    shieldbelt->mWornIntrinsics |= kShielded;
 /*
     shArmorIlk *antigravbelt =
     new shArmorIlk ("jetpack", "belt", BeltData[n].mDesc,
@@ -111,7 +127,7 @@ initializeArmor ()
                     kUsuallyBuggy, 100, kTiny, 5, 1, 0,
                     0, kNoEnergy, 0, 500, 0, 300, 10);
     n++;
-    antigravbelt->mInUseIntrinsics |= kFlying;
+    antigravbelt->mWornIntrinsics |= kFlying;
 */  
 
     n = 0;
@@ -125,7 +141,7 @@ initializeArmor ()
     new shArmorIlk ("ordinary jumpsuit", "jumpsuit", JumpsuitData[n].mDesc,
                     JumpsuitData[n].mColor, shJumpsuit, kCloth,
                     kEnhanceable, 400, kMedium, 20, 10, 0,
-                    1, kNoEnergy, 0, 5000, 0, 25, 100);
+                    1, kNoEnergy, 0, 5000, 0, 25, 80);
     n++;
 
     
@@ -149,6 +165,10 @@ initializeArmor ()
                     1, kNoEnergy, 0, 5000, 0, 500, 5);
     n++;
 
+    new shArmorIlk ("elven jumpsuit", "jumpsuit", "pink jumpsuit",
+                    kMagenta, shJumpsuit, kCloth,
+                    kEnhanceable, 400, kMedium, 20, 10, 0,
+                    2, kNoEnergy, 0, 5000, 0, 25, 15);
 
     shBodyArmor = 
     new shArmorIlk ("armor", "armor", "armor",
@@ -162,14 +182,14 @@ initializeArmor ()
                     kBrightCyan, shBodyArmor, kCloth,
                     kEnhanceable, 400, kMedium, 20, 10, 0,
                     1, kLaser, 4, 5000, 0, 100, 80);
-    reflecsuit->mInUseIntrinsics |= kReflection;
+    reflecsuit->mWornIntrinsics |= kReflection;
 
-    new shArmorIlk ("football uniform", "uniform", "padded uniform", 
+    new shArmorIlk ("set of football pads", "uniform", "padded uniform", 
                     kRed, shBodyArmor, kCloth,
                     kEnhanceable, 5000, kMedium, 20, 10, 0,
                     3, kNoEnergy, 0, 7500, 30, 100, 3);
 
-    new shArmorIlk ("flak jacket", "uniform", "padded uniform", 
+    new shArmorIlk ("flak jacket", "flak jacket", "flak jacket", 
                     kYellow, shBodyArmor, kCloth,
                     kIdentified | kEnhanceable, 2500, kMedium, 20, 10, -1,
                     3, kNoEnergy, 0, 5000, 0, 75, 75);
@@ -180,25 +200,39 @@ initializeArmor ()
                     kIdentified | kEnhanceable, 10000, kMedium, 20, 10, -2,
                     4, kNoEnergy, 0, 7500, 10, 400, 25);
 
-    new shArmorIlk ("suit of power armor", "suit of armor", 
-                    "suit of mechanical armor", 
-                    kYellow, shBodyArmor, kPlasteel,
+    new shArmorIlk ("aquamarine power armor", "suit of armor", 
+                    "aqua mechanical armor", 
+                    kBrightCyan, shBodyArmor, kPlasteel,
                     kIdentified | kEnhanceable | kPowered, 
                     15000, kMedium, 25, 15, -2,
                     7, kNoEnergy, 0, 10000, 0, 1500, 10);
-    
+
+    new shArmorIlk ("mean green power armor", "suit of armor", 
+                    "green mechanical armor", 
+                    kBrightGreen, shBodyArmor, kPlasteel,
+                    kIdentified | kEnhanceable | kPowered, 
+                    15000, kMedium, 25, 15, -2,
+                    7, kNoEnergy, 0, 10000, 0, 1500, 10);
+
     new shArmorIlk ("space suit", "space suit", "space suit", 
                     kWhite, shBodyArmor, kSteel, 
                     kIdentified | kEnhanceable | kPowered, 
                     18000, kMedium, 20, 10, -2,
                     4, kNoEnergy, 0, 10000, 100, 800, 25);
 
+    new shArmorIlk ("elven space suit", "space suit", "pink space suit",
+                    kMagenta, shBodyArmor, kSteel, 
+                    kIdentified | kEnhanceable | kPowered, 
+                    10000, kMedium, 20, 10, 0,
+                    5, kNoEnergy, 0, 10000, 100, 1500, 5);
+
+
 /* TODO: dreadnaught armor :-)*/    
 }
 
-shArmorIlk::shArmorIlk (char *name, 
-                        char *vaguename,
-                        char *appearance, 
+shArmorIlk::shArmorIlk (const char *name, 
+                        const char *vaguename,
+                        const char *appearance, 
                         shColor color,
                         shArmorIlk *parent,
                         shMaterialType material,
@@ -227,6 +261,7 @@ shArmorIlk::shArmorIlk (char *name,
     mVagueName = vaguename;
     mAppearance = appearance;
     mGlyph.mChar = ObjectGlyphs[mType].mChar | ColorMap[color];
+    mGlyph.mForeground = color;
     mCost = cost;
     mMaterial = material;
     mFlags = flags;// | kEnhanceable;
@@ -236,6 +271,8 @@ shArmorIlk::shArmorIlk (char *name,
     mHardness = hardness;
     mHP = hp;
     mPsiModifier = psimod;
+    mToHitModifier = 0;
+    mDamageModifier = 0;
     mArmorBonus = bonus;
     if (kNoEnergy != specialtype) {
         mResistances[specialtype] = specialbonus;

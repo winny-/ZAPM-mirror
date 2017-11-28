@@ -7,7 +7,7 @@
 shVector <shObjectIlk *> FloppyDiskIlks;
 shObjectIlk *BlankDisk;
 shObjectIlk *SpamDisk;
-
+shObjectIlk *BugDetectDisk;
 /* all floppy programs return:
    0: successfully executed, maybe expire
    -1: don't expire
@@ -91,9 +91,8 @@ identifyObjects (int howmany)
 {
     shObject *obj;
     int i;
-    char buf[80];
     int didsomething = 0;
-    char *prompt = "What do you want to identify?";
+    const char *prompt = "What do you want to identify?";
 
     while (howmany) {
         shMenu idmenu (prompt, shMenu::kCategorizeObjects);
@@ -111,16 +110,14 @@ identifyObjects (int howmany)
         }
         for (i = 0; i < v.count (); i++) {
             obj = v.get (i);
-            obj->inv (buf, 80);
-            idmenu.addItem (obj->mLetter, buf, obj, obj->mCount);
+            idmenu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
         }
-        idmenu.getResult ((void **) &obj);
+        idmenu.getResult ((const void **) &obj);
         if (obj) {
             ++didsomething;
             --howmany;
             obj->identify ();
-            obj->inv (buf, 80);
-            I->p ("%c - %s", obj->mLetter, buf);
+            I->p ("%c - %s", obj->mLetter, obj->inv ());
             prompt = "What do you want to identify next?";
         }
     }
@@ -136,6 +133,8 @@ doIdentify (shObject *computer, shObject *disk)
     I->p ("This is an identify program.");
     I->pause ();
     identifyObjects (howmany);
+    if (howmany > 1)
+        disk->setBugginessKnown ();
     return 0;
 }
 
@@ -211,7 +210,7 @@ doDetectObject (shObject *computer, shObject *disk)
     for (y = 0; y < MAPMAXROWS; y++) {
         for (x = 0; x < MAPMAXCOLUMNS; x++) {
             shObjectVector *v = Level->getObjects (x, y);
-            if (NULL != v) {
+            if (NULL != v && v->count ()) {
                 int i;
                 int besttype = kMaxObjectType;
                 for (i = 0; i < v->count (); i++) {
@@ -401,23 +400,20 @@ doDebug (shObject *computer, shObject *disk)
 {
     shObject *obj;
     shObjectVector v;
-    char buf[80];
 
     if (computer->isBuggy ()) {
         computer->setDebugged ();
         disk->setIlkKnown ();
-        computer->your (buf, 80);
-        I->p ("%s seems to working much better now.", buf);
+        I->p ("%s seems to working much better now.", computer->your ());
         computer->setBugginessKnown ();
         return 0;
     }
     if (Hero.isConfused ()) {
         disk->setIlkKnown ();
         disk->resetBugginessKnown ();
-        disk->your (buf, 80);
         if (disk->isBuggy ()) {
             disk->setDebugged ();
-            I->p ("You patch some bugs in %s.", buf);
+            I->p ("You patch some bugs in %s.", disk->your ());
         } else if (disk->isOptimized ()) {
             int i;
             selectObjectsByFunction (&v, Hero.mInventory, &shObject::isBuggy);
@@ -428,7 +424,7 @@ doDebug (shObject *computer, shObject *disk)
             I->p ("%d objects debugged.", i);
         } else {
             disk->setOptimized ();
-            I->p ("You optimize %s.", buf);
+            I->p ("You optimize %s.", disk->your ());
         }
         disk->setBugginessKnown ();
         return 0;
@@ -441,15 +437,14 @@ doDebug (shObject *computer, shObject *disk)
             return 0;
         }
         obj->resetBugginessKnown ();
-        obj->your (buf, 80);
         if (obj->isBuggy ()) {
             obj->setDebugged ();
-            I->p ("You patch some bugs in %s.", buf);
+            I->p ("You patch some bugs in %s.", obj->your ());
         } else if (obj->isOptimized ()) {
-            I->p ("You verify that %s is fully optimized.", buf);
+            I->p ("You verify that %s is fully optimized.", obj->your ());
         } else {
             obj->setOptimized ();
-            I->p ("You optimize %s.", buf);
+            I->p ("You optimize %s.", obj->your ());
         }
         obj->setBugginessKnown ();
         return 0;
@@ -464,8 +459,7 @@ doDebug (shObject *computer, shObject *disk)
             obj = v2.get (RNG (v2.count ()));
             obj->setDebugged ();
             obj->resetBugginessKnown ();
-            obj->an (buf, 80);
-            I->p ("Debugging %s.", buf);
+            I->p ("Debugging %s.", obj->an ());
             obj->setBugginessKnown ();
             disk->setIlkKnown ();
         } else {
@@ -482,7 +476,6 @@ doEnhanceArmor (shObject *computer, shObject *disk)
 {
     shObject *obj;
     shObjectVector v, w;
-    char buf[80];
 
     selectObjects (&v, Hero.mInventory, kArmor);
     selectObjectsByFunction (&w, &v, &shObject::isWorn);
@@ -494,22 +487,22 @@ doEnhanceArmor (shObject *computer, shObject *disk)
         return 0;
     }
     obj = v.get (RNG (v.count ()));
-    obj->your (buf, 80);
+    const char *your_armor = obj->your ();
 
     if (Hero.isConfused ()) {
         if (kNoEnergy != obj->vulnerability ()) {
             obj->setFooproof ();
             obj->setFooproofKnown ();
         }
-        I->p ("%s vibrates", buf);
+        I->p ("%s vibrates.", your_armor);
         if (obj->mDamage) {
             obj->mDamage = 0;
             if (!Hero.isBlind ()) {
-                I->p ("%s looks as good as new!", buf);
+                I->p ("%s looks as good as new!", your_armor);
             }
         }
     } else if (disk->isBuggy ()) {
-        I->p ("Blue smoke billows from %s.", buf);
+        I->p ("Blue smoke billows from %s.", your_armor);
         --obj->mEnhancement;
         obj->setBuggy ();
         obj->setBugginessKnown ();
@@ -523,14 +516,14 @@ doEnhanceArmor (shObject *computer, shObject *disk)
             disk->setBugginessKnown ();
             obj->setBugginessKnown ();
         }
-        I->p ("%s feels warm for %s.", buf, bonus > 1 ? "a while" : 
+        I->p ("%s feels warm for %s.", your_armor, bonus > 1 ? "a while" : 
               bonus > 0 ? "a moment" : "an instant");
     } else {
         if (obj->mEnhancement < 3) {
             ++obj->mEnhancement;
-            I->p ("%s feels warm for a moment.", buf);
+            I->p ("%s feels warm for a moment.", your_armor);
         } else {
-            I->p ("%s feels warm for an instant.", buf);
+            I->p ("%s feels warm for an instant.", your_armor);
         }
         if (obj->isBuggy ()) {
             obj->setDebugged ();
@@ -547,7 +540,6 @@ doEnhanceImplant (shObject *computer, shObject *disk)
 {
     shObject *obj;
     shObjectVector v, w;
-    char buf[80];
 
     selectObjects (&v, Hero.mInventory, kImplant);
     selectObjectsByFunction (&w, &v, &shObject::isWorn);
@@ -559,8 +551,7 @@ doEnhanceImplant (shObject *computer, shObject *disk)
         return 0;
     }
     obj = v.get (RNG (v.count ()));
-    obj->your (buf, 80);
-
+    
     if (disk->isBuggy ()) {
         I->p ("You feel a stinging sensation in your %s.", 
               describeImplantSite (obj->mImplantSite));
@@ -572,15 +563,16 @@ doEnhanceImplant (shObject *computer, shObject *disk)
         int bonus = (6 - obj->mEnhancement) / 2;
         bonus = bonus <= 0 ? 0 : RNG (1, bonus);
         obj->mEnhancement += bonus;
-        I->p ("You feel a %s sensation in your %s",
-              bonus > 1 ? "buzzing" : "tingling",
+        I->p ("You feel a %s sensation in your %s.",
+              bonus > 1 ? "buzzing" : 
+              bonus > 0 ? "tingling" : "brief tingling",
               describeImplantSite (obj->mImplantSite));
     } else if (obj->mEnhancement < 3) {
         ++obj->mEnhancement;
-        I->p ("You feel a tingling sensation in your %s",
+        I->p ("You feel a tingling sensation in your %s.",
               describeImplantSite (obj->mImplantSite));
     } else {
-        I->p ("You feel a brief tingling sensation in your %s",
+        I->p ("You feel a brief tingling sensation in your %s.",
               describeImplantSite (obj->mImplantSite));
     }
     disk->setIlkKnown ();
@@ -594,7 +586,7 @@ doEnhanceWeapon (shObject *computer, shObject *disk)
 {
     shObject *obj;
     shObjectVector v;
-    char buf[80];
+    const char *your_weapon;
 
     if (NULL == Hero.mWeapon) {
         I->p ("Your hands sweat profusely.");
@@ -602,7 +594,7 @@ doEnhanceWeapon (shObject *computer, shObject *disk)
     }
 
     obj = Hero.mWeapon;
-    obj->your (buf, 80);
+    your_weapon = obj->your ();
     if (!obj->isA (kWeapon)) {
         I->p ("Your hands sweat profusely.");
         return 0;
@@ -612,15 +604,15 @@ doEnhanceWeapon (shObject *computer, shObject *disk)
             obj->setFooproof ();
             obj->setFooproofKnown ();
         }
-        I->p ("%s vibrates", buf);
+        I->p ("%s vibrates", your_weapon);
         if (obj->mDamage) {
             obj->mDamage = 0;
             if (!Hero.isBlind ()) {
-                I->p ("%s looks as good as new!", buf);
+                I->p ("%s looks as good as new!", your_weapon);
             }
         }
     } else if (disk->isBuggy ()) {
-        I->p ("%s shudders%s", buf, 
+        I->p ("%s shudders%s", your_weapon, 
               obj->isBuggy () ? "!" : " and welds to your hand!");
         --obj->mEnhancement;
         obj->setBuggy ();
@@ -631,14 +623,15 @@ doEnhanceWeapon (shObject *computer, shObject *disk)
         bonus = bonus <= 0 ? 0 : RNG (1, bonus);
         obj->setOptimized ();
         obj->mEnhancement += bonus;
-        I->p ("%s feels warm for %s.", buf, bonus > 1 ? "a while" : 
-                    bonus > 0 ? "a moment" : "an instant");
+        I->p ("%s feels warm for %s.", your_weapon, 
+              bonus > 1 ? "a while" : 
+              bonus > 0 ? "a moment" : "an instant");
     } else {
         if (obj->mEnhancement < 3) {
             ++obj->mEnhancement;
-            I->p ("%s feels warm for a moment.", buf);
+            I->p ("%s feels warm for a moment.", your_weapon);
         } else {
-            I->p ("%s feels warm for an instant.", buf);
+            I->p ("%s feels warm for an instant.", your_weapon);
         }
         if (obj->isBuggy ()) {
             obj->setDebugged ();
@@ -661,11 +654,11 @@ doHypnosis (shObject *computer, shObject *disk)
     }
 
     if (disk->isBuggy ()) {
-        Hero.makeParalyzed (1000 * NDX (10, 12));
+        Hero.makeAsleep (1000 * NDX (10, 12));
     } else if (disk->isOptimized ()) {
-        Hero.makeParalyzed (1000 * NDX (4, 6));
+        Hero.makeAsleep (1000 * NDX (4, 6));
     } else {
-        Hero.makeParalyzed (1000 * NDX (6, 10));
+        Hero.makeAsleep (1000 * NDX (6, 10));
     }
 
     disk->setIlkKnown ();
@@ -681,19 +674,33 @@ int
 shCreature::transport (int x, int y, int safe)
 {
     int res;
-    if (!mLevel->removeCreature (this)) {
-        return -1;
-    }
+
     if (-1 == x) {
         mLevel->findUnoccupiedSquare (&x, &y);
     }
+    if (isHero ()) {
+        if (Level->noTransport ()) {
+            if (Hero.isBlind ()) 
+                I->p ("You shudder for a moment.");
+            else 
+                I->p ("You flicker for a moment.");
+            return 0;
+        }
+        Hero.oldLocation (x, y, mLevel);
+    }
+    //if (!mLevel->removeCreature (this)) {
+    //    return -1;
+    //}
     mTrapped = 0;
+    mDrowning = 0;
     while (safe--) {
-        res = mLevel->putCreature (this, x, y);
+        res = mLevel->moveCreature (this, x, y);
         if (-1 == res) {
             /* try again, random location */
             mLevel->findUnoccupiedSquare (&x, &y);
         } else {
+            if (isHero ())
+                Level->attractWarpMonsters (x, y);
             return res;
         }
     }
@@ -716,6 +723,17 @@ doTransport (shObject *computer, shObject *disk)
     } else if (disk->isOptimized () && !Hero.isConfused ()) {
         /* controlled local transport */
         if (I->getSquare ("Transport to what location?", &x, &y, -1)) {
+            if (Level->isMainframe ()) {
+                int tries = 50;
+                int nx, ny;
+                do {
+                    nx = x + RNG (15) - 8;
+                    ny = y + RNG (9) - 4;
+                    Level->findNearbyUnoccupiedSquare (&nx, &ny);
+                } while (nx == x && ny == y && tries--);
+                I->p ("It's hard to transport accurately in here.");
+                x = nx; y = ny;
+            }
             Hero.transport (x, y, 100);
         }
         return 0;
@@ -728,7 +746,7 @@ doTransport (shObject *computer, shObject *disk)
 }
 
 
-static char *
+static const char *
 energyDescription (shEnergyType t) {
     switch (t) {
 
@@ -751,21 +769,21 @@ energyDescription (shEnergyType t) {
     case kStunning: return "stunning";
 
     case kNoEnergy:
-    case kBrainDrain:
+    case kBrainExtracting:
     case kBugging:
     case kChoking:
     case kCreditDraining:
+    case kDisarming:
     case kDisintegrating:
     case kFaceHugging:
     case kHealing:
     case kHosing:
     case kRestoring:
-    case kSeizing:
     case kSickening:
-    case kSuing:
     case kTimeWarping:
     case kTransporting:
     case kViolating:
+    case kWebbing:
     case kMaxEnergyType:
         return NULL;
     }
@@ -773,20 +791,30 @@ energyDescription (shEnergyType t) {
 }
 
 
-static int
-doDiagnostics (shObject *computer, shObject *disk)
+void
+shHero::doDiagnostics ()
 {
     int tmp;
     char buf[60];
     shMenu menu ("Personal diagnostics", shMenu::kNoPick);
 
-    disk->setIlkKnown ();
     I->p ("Initiating body scan.");
-    I->pause ();
+    I->pauseXY (Hero.mX, Hero.mY);
     {
         int e;
         int resist;
-        char *description;
+        const char *description;
+
+        snprintf (buf, 60, "Your Base Attack Bonus is %d.", mBAB);
+        menu.addItem (' ', buf, NULL, 1);
+        if (mToHitModifier) {
+            snprintf (buf, 60, "Your To Hit Modifier is %d.", mToHitModifier);
+            menu.addItem (' ', buf, NULL, 1);
+        }
+        if (mDamageModifier) {
+            snprintf (buf, 60, "Your Damage Modifier is %d.", mDamageModifier);
+            menu.addItem (' ', buf, NULL, 1);
+        }
 
         for (e = kNoEnergy; e < kMaxEnergyType; e++) {
             resist = Hero.getResistance ((shEnergyType) e);
@@ -803,15 +831,17 @@ doDiagnostics (shObject *computer, shObject *disk)
             }
         }
 
-
         if (Hero.hasTelepathy ()) {
             menu.addItem (' ', "You are telepathic.", NULL, 1);
         }
         if (Hero.hasXRayVision ()) {
             menu.addItem (' ', "You have X-ray vision.", NULL, 1);
         }
+        if (Hero.hasNightVision ()) {
+            menu.addItem (' ', "You have night vision.", NULL, 1);
+        }
         if (Hero.hasReflection ()) {
-            menu.addItem (' ', "You can deflect laser beams.", NULL, 1);
+            menu.addItem (' ', "You have reflection.", NULL, 1);
         }
         if (Hero.hasTranslation ()) {
             menu.addItem (' ', "You understand alien languages.", NULL, 1);
@@ -831,6 +861,9 @@ doDiagnostics (shObject *computer, shObject *disk)
         if (Hero.hasBrainShield ()) {
             menu.addItem (' ', "Your have psionic protection.", NULL, 1);
         }
+        if (Hero.hasAirSupply ()) {
+            menu.addItem (' ', "You have an air supply.", NULL, 1);
+        }
         if (Hero.hasCrazyIvan ()) {
             menu.addItem (' ', 
                           "Your brain's hemispheres are reversed.", NULL, 1);
@@ -841,7 +874,7 @@ doDiagnostics (shObject *computer, shObject *disk)
         if (Hero.isLucky ()) {
             menu.addItem (' ', "You are lucky.", NULL, 1);
         }
-        
+
         snprintf (buf, 60, "You've been exposed to %s radiation.",
                   Hero.mRad > 300 ? "lethal levels of" :
                   Hero.mRad > 200 ? "very dangerous levels of" :
@@ -868,6 +901,14 @@ doDiagnostics (shObject *computer, shObject *disk)
     }
     
     menu.finish ();
+}
+
+
+static int
+doDiagnostics (shObject *computer, shObject *disk)
+{
+    disk->setIlkKnown ();
+    Hero.doDiagnostics ();
     return 0;
 }
 
@@ -877,7 +918,6 @@ doHacking (shObject *computer, shObject *disk)
 {
     shObject *obj;
     shObjectVector v;
-    char buf[80];
     int sk;
     int score;
 
@@ -888,7 +928,7 @@ doHacking (shObject *computer, shObject *disk)
     if (NULL == obj) {
         return 0;
     }
-    obj->your (buf, 80);
+
     if (obj->isCracked ()) {
         obj->setCrackedKnown ();
         I->p ("This software has already been cracked!");
@@ -909,7 +949,7 @@ doHacking (shObject *computer, shObject *disk)
         score -= 2;
     }
     if (score >= 15) {
-        I->p ("You remove the copy protection from %s.", buf);
+        I->p ("You remove the copy protection from %s.", obj->your ());
         obj->setCracked ();
         obj->setCrackedKnown ();
         Hero.exerciseSkill (kHacking, 3);
@@ -925,6 +965,49 @@ doHacking (shObject *computer, shObject *disk)
 }
 
 
+void
+attractLawyers ()
+{
+    int i;
+    int x, y;
+    int cnt = 0;
+
+    for (i = 0; i < Level->mCrList.count () ; i++) {
+        shCreature *c = Level->mCrList.get (i);
+        if (c->isLawyer ()) {
+            if (c->canSee (&Hero)) {
+                ((shMonster *) c) -> makeAngry ();
+            } else if (cnt < 3) {
+                x = Hero.mX;
+                y = Hero.mY;
+                if (0 == Level->findAdjacentUnoccupiedSquare (&x, &y)) {
+                    c->transport (x, y, 1);
+                    c->resetFleeing ();
+                    cnt++;
+                }
+            }
+        }
+    }
+
+    if (!cnt && !RNG (13)) {
+        x = Hero.mX;
+        y = Hero.mY;
+        if (0 == Level->findAdjacentUnoccupiedSquare (&x, &y)) {
+            shMonster *m = new shMonster (findAMonsterIlk ("lawyer"));
+            if (0 == Level->putCreature (m, x, y)) {
+                cnt++;
+            }
+        }
+    }
+
+    if (1 == cnt) {
+        I->p ("You seem to have attracted the attention of a lawyer.");
+    } else if (cnt > 1) {
+        I->p ("You seem to have attracted the attention of some lawyers.");
+    }
+
+}
+
 
 /* returns number of ms taken */
 int
@@ -932,6 +1015,7 @@ executeFloppyDisk (shObject *computer, shObject *disk)
 {
     shFloppyDiskIlk *ilk = (shFloppyDiskIlk *) disk->mIlk;
     int result;
+    int summonlawyer = 0;
     
     if (Hero.isBlind ()) {
         if (computer->isA ("mega computer")) {
@@ -966,6 +1050,15 @@ executeFloppyDisk (shObject *computer, shObject *disk)
     }
 
     result = ilk->mUseFunc (computer, disk);
+
+    if (-1 != result && disk->isCracked ()) {
+        int danger = Hero.getStoryFlag ("software piracy");
+        if (0 == danger) {
+            Hero.setStoryFlag ("software piracy", 5);
+        } else if (RNG (0, danger) && RNG (0, danger)) {
+            summonlawyer = 1;
+        }
+    }
     
     if (1 == result) {
         I->p ("The floppy disk self destructs!");
@@ -985,7 +1078,12 @@ executeFloppyDisk (shObject *computer, shObject *disk)
         } else if (RNG (2)) {
             disk->setBuggy ();
         }
+    } else if (disk->isCracked () && !disk->isCrackedKnown ()) {
+        I->p ("The licence for this software has been cracked!");
+        disk->setCrackedKnown ();
     }
+
+    if (summonlawyer) attractLawyers ();
 
     return computer->isOptimized () ? FULLTURN : LONGTURN;
 }
@@ -1003,6 +1101,7 @@ initializeFloppyDisks ()
     GenericFloppyDisk = 
         new shFloppyDiskIlk ("floppy disk", "floppy disk", NULL, 0, 0);
         
+    BugDetectDisk = 
     new shFloppyDiskIlk ("floppy disk of bug detection", 
                          FloppyData[n++].mDesc, 
                          &doDetectBugs, 25, 50);
@@ -1059,8 +1158,8 @@ initializeFloppyDisks ()
 }
 
 
-shFloppyDiskIlk::shFloppyDiskIlk (char *name, 
-                                  char *appearance, 
+shFloppyDiskIlk::shFloppyDiskIlk (const char *name, 
+                                  const char *appearance, 
                                   shFloppyDiskFunc *usefunc,
                                   int cost,
                                   int prob)
@@ -1076,7 +1175,7 @@ shFloppyDiskIlk::shFloppyDiskIlk (char *name,
     mMaterial = kPlastic;
     mFlags = kMergeable;
     mProbability = prob;
-    mWeight = 50;
+    mWeight = 18;
     mSize = kFine;
     mHardness = 5;
     mHP = 1;
@@ -1103,6 +1202,8 @@ createFloppyDisk (char *desc,
         bugginess = (1 == tmp) ? 1 : (0 == tmp) ? -1 : 0;
         if (SpamDisk == ilk && RNG (4)) {
             bugginess = -1;
+        } else if (BugDetectDisk == ilk && RNG (2)) {
+            bugginess = 1;
         }
     }
 
@@ -1112,7 +1213,7 @@ createFloppyDisk (char *desc,
     floppy->mBugginess = bugginess;
     floppy->mHP = ilk->mHP;
     floppy->setEnhancementKnown ();
-    floppy->setFooproofKnown ();
+    floppy->setCrackedKnown ();
     return floppy;
 }
 

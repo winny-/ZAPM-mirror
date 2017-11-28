@@ -3,6 +3,7 @@
 #include "Map.h"
 #include "Interface.h"
 #include "Hero.h"
+#include "Game.h"
 
 int GameOver = 0;
 
@@ -24,11 +25,11 @@ void maybeSpawnMonsters ()
 }
 
 int 
-newGame ()
+newGame (const char *name)
 {
-    char namebuf[20];
-    char *name;
+    shProfession *profession;
 
+    I->pageLog ();
     Clock = 0;
 
     randomizeIlkNames ();
@@ -38,17 +39,10 @@ newGame ()
     Level = Maze.get (1);
     Hero.mLevel = Level;
 
-    
-    name = getenv ("USER");
-    if (!name) {
-        I->getStr (namebuf, 16, "What is your name?");
-        name = namebuf;
-    }
-    I->pageLog ();
-    shProfession *profession = chooseProfession ();
-    if (!profession) { 
-        return -1;
-    }
+    do {
+        profession = chooseProfession ();
+    } while (!profession);
+
     Hero.init (name, profession);
 
     MonsterClock = RNG (30000, 90000);
@@ -84,6 +78,8 @@ gameLoop ()
     I->drawScreen ();
 
     while (!GameOver) {
+        /* cleanup deleted objects (HACK) */
+        purgeDeletedObjects ();
         /* cleanup any dead monsters */
         for (i = Level->mCrList.count () - 1; 
              i >= 0;
@@ -96,7 +92,6 @@ gameLoop ()
             }
         }
         /* maybe hero has a turn */
-        I->debug ("hero has %d AP", Hero.mAP);
         if (Hero.mAP >= 0) {
             Hero.takeTurn ();
         }
@@ -125,6 +120,38 @@ gameLoop ()
             c->mAP += speedToAP (c->mSpeed);
         }
 
+        /* level timeouts */
+        {
+            if (Level->mTimeOuts.mCompactor > 0 && 
+                Clock > Level->mTimeOuts.mCompactor) 
+            {
+                if (Level->mCompactorState < 10) {
+                    /* compact */
+                    if (Level->mCompactorState %2) 
+                        Level->moveWalls (2);
+                    else 
+                        Level->moveWalls (1);
+                } else if (Level->mCompactorState > 30) {
+                    /* done reseting, unlock doors */
+                    Level->mCompactorState = -1;
+                    Level->mTimeOuts.mCompactor = -1;
+                    Level->magDoors (-1); /* kludgey! */
+                } else if (Level->mCompactorState > 20) {
+                    /* reset the trap */
+                    if (Level->mCompactorState %2) 
+                        Level->moveWalls (-1);
+                    else 
+                        Level->moveWalls (-2);                   
+                } else {
+                    Hero.resetStoryFlag ("walls moving");
+                    Hero.resetStoryFlag ("walls heard");
+                }
+                Level->mCompactorState++;
+                if (Level->mTimeOuts.mCompactor > 0) 
+                    Level->mTimeOuts.mCompactor += FULLTURN * 3;
+            }
+        }
+
         Clock += 100;
 
         /* maybe spawn new monsters */
@@ -137,6 +164,26 @@ gameLoop ()
         }
     }
 }
+
+
+/* WIN32: wait for the user to press a key before exiting, because
+   they're probably running outside cmd.exe and the window will
+   otherwise disappear.  (I tried registering this code using
+   atexit(), but my process kept getting killed for no apparent reason
+   while awaiting input...  Grr!!) */
+void
+exitZapm (const int code)
+{
+#ifdef _WIN32
+    printf ("Press enter to exit...\n");
+    getchar ();
+#endif
+    exit (code);
+}
+
+
+
+
 
 
 

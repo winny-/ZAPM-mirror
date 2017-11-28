@@ -40,15 +40,15 @@ shMapLevel::buildTown ()
 
     mMapType = kTown;
 
-    layRoom (19, 6, 40, 19);
-    layRoom (28, 9, 34, 13);
-    layRoom (1, 1, 10, 5);
-    layRoom (8, 7, 15, 13);
-    layRoom (0, 15, 9, 19);
-    layRoom (19, 2, 25, 6);
-    layRoom (25, 3, 33, 6);
-    layRoom (33, 2, 40, 6);
-    layRoom (19, 16, 29, 19);
+    layRoom (19, 6, 40, 19);       /* main room */
+    layRoom (28, 9, 34, 13);       /* center room */
+    layRoom (1, 1, 10, 5);         /* upper left */
+    layRoom (8, 7, 15, 13);        /* guard room */
+    layRoom (0, 15, 9, 19);        /* bottom left */
+    layRoom (19, 2, 25, 6);        /* software store */
+    layRoom (25, 3, 33, 6);        /* middle top */
+    layRoom (33, 2, 40, 6);        /* */
+    layRoom (19, 16, 29, 19);      /* bottom left empty shop */
     layRoom (33, 16, 40, 19);
     layRoom (40, 2, 46, 5);
     layRoom (42, 5, 46, 8);
@@ -96,6 +96,7 @@ shMapLevel::buildTown ()
     addVat (47, 9);
     makeShop (33, 2, 40, 6, shRoom::kGeneralStore);
     makeShop (33, 16, 40, 19, shRoom::kHardwareStore);
+    makeHospital (19, 16, 29, 19);      /* bottom left empty shop */
 
 
     shMonster *guard = new shMonster (findAMonsterIlk ("guardbot"));
@@ -117,8 +118,8 @@ shMapLevel::buildTown ()
         shMonster *bot = new shMonster (botilk);
         findUnoccupiedSquare (&x, &y);
         putCreature (bot, x, y);
-        if (RNG (3)) {
-            bot->mStrategy = shMonster::kPeaceful;
-        }
+        //if (RNG (3)) { 
+        //    bot->mStrategy = shMonster::kPeaceful;
+        //}
     }
 }

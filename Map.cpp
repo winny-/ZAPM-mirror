@@ -6,7 +6,7 @@
 #include "Monster.h"
 #include "Object.h"
 #include "Hero.h"
-
+#include "MapBuilder.h"
 #if 0 
 char gASCIITiles[256] = {
     ' ', '|', '-', '+', '+', '+', '+', '+', '+', '+', '|', '|', 'x', '.'
@@ -18,7 +18,6 @@ char gASCIITiles[256] = {
 #endif
 
 #define SETSQ(_x, _y, _w) mSquares[_x][_y].mTerr = _w
-#define SETROOM(_x, _y, _r) mSquares[_x][_y].mRoomId = _r
 
 const char *
 stringDirection (shDirection d) 
@@ -39,9 +38,9 @@ rlDistance (int x1, int y1, int x2, int y2)
     int vert = y2 > y1 ? y2 - y1 : y1 - y2;
 
     if (vert > horiz) {
-        return (int) (5 * (sqrt (2) * horiz + vert - horiz));
+        return (int) (5 * (sqrt ((double) 2.0) * horiz + vert - horiz));
     } else {
-        return (int) (5 * (sqrt (2) * vert + horiz - vert));
+        return (int) (5 * (sqrt ((double) 2.0) * vert + horiz - vert));
     }
 }
 
@@ -51,8 +50,8 @@ rlDistance (int x1, int y1, int x2, int y2)
 int 
 distance (int x1, int y1, int x2, int y2)
 {
-    return (int) (sqrt ((x1 - x2) * (x1 - x2) * 25 + 
-                        (y1 - y2) * (y1 - y2) * 25)); 
+    return (int) (sqrt ((double) ((x1 - x2) * (x1 - x2) * 25 + 
+                                  (y1 - y2) * (y1 - y2) * 25))); 
 }
 
 
@@ -195,29 +194,31 @@ areAdjacent (shCreature *c1, shCreature *c2)
 }
 
 
-int
-shFeature::getDescription (char *buf, int len)
+const char *
+shFeature::getDescription ()
 {
-    const char *d;
-
     switch (mType) {
-    case kDoorClosed: d = "door"; break;
-    case kStairsUp: d = "staircase up"; break;
-    case kStairsDown: d = "staircase down"; break;
-    case kComputerTerminal: d = "computer terminal"; break;
-    case kRadTrap: d = "radiation trap"; break;
-    case kDoorOpen: d = "open doorway"; break;
-    case kVat: d = "sludge vat"; break;
-    case kPit: d = mTrapUnknown ? "pit trap" : "pit"; break;
-    case kAcidPit: d = mTrapUnknown ? "acid pit trap" : "acid pit"; break;
-    case kTrapDoor: d = "trap door"; break;
-    case kHole: d = "hole"; break;
+    case kDoorClosed: return "door"; 
+    case kStairsUp: return "staircase up"; 
+    case kStairsDown: return "staircase down"; 
+    case kComputerTerminal: return "computer terminal";
+    case kRadTrap: return "radiation trap";
+    case kDoorOpen: return "open doorway";
+    case kVat: return "sludge vat";
+    case kPit: return mTrapUnknown ? "pit trap" : "pit";
+    case kAcidPit: return mTrapUnknown ? "acid pit trap" : "acid pit";
+    case kSewagePit: return "dangerously deep pool of sewage";
+    case kTrapDoor: return "trap door";
+    case kHole: return "hole";
     case kDoorHiddenHoriz:
     case kDoorHiddenVert: 
-        d = "wall"; break;
-    default: d = "strange feature"; break;
+    case kMovingHWall:
+        return "wall";
+    case kMachinery:
+        return "piece of machinery";
+    default: 
+        return "strange feature";
     }
-    return snprintf (buf, len, "%s", d);
 }
 
 
@@ -235,14 +236,38 @@ shMapLevel::debugDraw ()
 }
 
 
+/*  nw,ne,sw,se are directions from which the square is seen.
+    -1: dark when seen from that side
+     1: light
+     0: leave as is
+*/
+
 void 
-shMapLevel::setLit (int x, int y, int lit)
+shMapLevel::setLit (int x, int y, int nw, int ne, int sw, int se)
 {
-    if (lit) { 
-        mSquares[x][y].mFlags &= ~shSquare::kDark;
-    } else { 
-        mSquares[x][y].mFlags |= shSquare::kDark; 
-        if (I->mSqGlyphs[kStoneFloor] == getMemory (x, y)) {
+    if (nw > 0) {
+        mSquares[x][y].mFlags &= ~shSquare::kDarkNW;
+    } else if (nw < 0) {
+        mSquares[x][y].mFlags |= shSquare::kDarkNW; 
+    }
+    if (ne > 0) {
+        mSquares[x][y].mFlags &= ~shSquare::kDarkNE;
+    } else if (ne < 0) {
+        mSquares[x][y].mFlags |= shSquare::kDarkNE; 
+    }
+    if (sw > 0) {
+        mSquares[x][y].mFlags &= ~shSquare::kDarkSW;
+    } else if (sw < 0) {
+        mSquares[x][y].mFlags |= shSquare::kDarkSW; 
+    }
+    if (se > 0) {
+        mSquares[x][y].mFlags &= ~shSquare::kDarkSE;
+    } else if (se < 0) {
+        mSquares[x][y].mFlags |= shSquare::kDarkSE; 
+    }
+
+    if (ne + nw + se + sw <= -4) {
+        if (I->mSqGlyphs[kFloor] == getMemory (x, y)) {
             setMemory (x, y, ' ');
         }
     }
@@ -263,14 +288,14 @@ shMapLevel::layCorridor (int x1, int y1, int x2, int y2)
     }
     if (x1 == x2) {
         for (i = y1; i <= y2; i++) {
-            SETSQ (x1, i, kStoneFloor);
+            SETSQ (x1, i, kFloor);
             SETSQ (x1 - 1, i, kVWall); // west wall
             SETSQ (x1 + 1, i, kVWall); // east wall
         }
     }
     else if (y1 == y2) {
         for (i = x1; i <= x2; i++) {
-            SETSQ (i, y1, kStoneFloor);     // floor
+            SETSQ (i, y1, kFloor);     // floor
             SETSQ (i, y1 - 1, kHWall); // north wall
             SETSQ (i, y1 + 1, kHWall); // south wall
         }
@@ -300,7 +325,7 @@ shMapLevel::layRoom (int x1, int y1, int x2, int y2)
 
     for (i = x1 + 1; i < x2; i++) {
         for (j = y1 + 1; j < y2; j++) {
-            SETSQ (i, j, kStoneFloor);
+            SETSQ (i, j, kFloor);
             SETROOM (i, j, mNumRooms);
         }
     }
@@ -308,6 +333,19 @@ shMapLevel::layRoom (int x1, int y1, int x2, int y2)
     mRooms[mNumRooms].mType = shRoom::kNormal;
     mNumRooms++;
 }
+
+
+void
+shMapLevel::setRoomId (int x1, int y1, int x2, int y2, int id)
+{
+    int x, y;
+    for (y = y1; y <= y2; y++)
+        for (x = x1; x <= x2; x++)
+            SETROOM (x, y, id);
+}
+    
+
+
 
 void
 shMapLevel::buildDenseLevel ()
@@ -324,81 +362,116 @@ shMapLevel::buildDenseLevel ()
 
     layCorridor (x, y, x + l, y);
     layRoom (x + RNG (5), RNG (5), x + l - RNG (5), y - 1);
-    SETSQ (x + l/2, y-1, kStoneFloor);
+    SETSQ (x + l/2, y-1, kFloor);
+}
+
+
+shMapLevel *
+shMapLevel::buildBranch (MapType type, 
+                         int depth, 
+                         int dlevel, 
+                         shMapLevel **end,
+                         int ascending /* = 0*/ )
+{
+    int i;
+    shMapLevel *first, *prev, *L;
+    
+    first = prev = L = NULL;
+    for (i = 0; i < depth; i++) {
+        L = new shMapLevel (dlevel, type);
+        Maze.add (L);
+        if (i > 0) {
+            if (ascending)
+                L->addDownStairs (-1, -1, prev, -1, -1);
+            else 
+                prev->addDownStairs (-1, -1, L, -1, -1);
+        } else {
+            first = L;
+        }
+        prev = L;
+        dlevel++;
+    }
+    if (end) 
+        *end = L;
+    return first;
 }
 
 
 void
 shMapLevel::buildMaze ()
 {
-    int i;
-    shMapLevel *A, *L;
- 
-    Maze.add (NULL); /* dummy zeroth level */
-    for (i = 1; i <= BUNKERLEVELS; i++) {
-        if (TOWNLEVEL == i) {
-            Maze.add (new shMapLevel (i, kTown));
-        } else if (BUNKERLEVELS == i) {
-            Maze.add (new shMapLevel (i, kRabbit));
-        } else {
-            Maze.add (new shMapLevel (i, kBunkerRooms));
-        }
-    }
-/*
-    { 
-        int x, y;
-        shMonster *rabbit = new shMonster (findAMonsterIlk ("killer rabbit"));
-        Maze.get (i - 1) -> findUnoccupiedSquare (&x, &y);
-        Maze.get (i - 1) -> putCreature (rabbit, x, y);
-    }
-*/
-    for (i = 1; i < TOWNLEVEL-1; i++) {
-        Maze.get (i) -> addDownStairs (-1, -1, Maze.get (i + 1), -1, -1);
-    }
-    Maze.get (TOWNLEVEL - 1) -> 
-        addDownStairs (-1, -1, Maze.get (TOWNLEVEL), 7, 3);
-    Maze.get (TOWNLEVEL) -> 
-        addDownStairs (6, 17, Maze.get (TOWNLEVEL + 1), -1, -1);
-    for (i = TOWNLEVEL + 1; i < BUNKERLEVELS - 1; i++) {
-        Maze.get (i) -> addDownStairs (-1, -1, Maze.get (i + 1), -1, -1);
-    }
-    Maze.get (BUNKERLEVELS - 1) ->
-        addDownStairs (-1, -1, Maze.get (BUNKERLEVELS), 20, 10);
-    for (i = 0; i < CAVELEVELS; i++) {
-        L = new shMapLevel (i + TOWNLEVEL + 1, kRadiationCave);
-        Maze.add (L);
-        if (0 == i) {
-            Maze.get (TOWNLEVEL) -> addDownStairs (53, 14, L, -1, -1);
-        } else {
-            A -> addDownStairs (-1, -1, L, -1, -1);
-        }
-        A = L;
-    }
-    L = new shMapLevel (i + TOWNLEVEL + 1, kMainframe);
-    Maze.add (L);
-    A -> addDownStairs (-1, -1, L, 6, 16);
-    { 
-        int x = RNG (40, 50);
-        int y = RNG (2, 10);
-        
-        L->findNearbyUnoccupiedSquare (&x, &y);
-        L->putObject (createObject ("Bizarro Orgasmatron", 0), x, y);
-    }
+    int x, y;
+    shMapLevel *top, *town, *cavemouth, *rabbit, *plant;
+    shMapLevel *head, *tail;
+    shObject *fakes[5] = {
+        createObject ("Bizarre Orgasmatron", 0),
+        createObject ("Bizaaro Orgasmatron", 0),
+        createObject ("Bizzaro Orgasmatron", 0),
+        createObject ("Bazaaro Orgasmatron", 0),
+        createObject ("Bazarro Orgasmatron", 0) };
+
+    shuffle (fakes, 5, sizeof (shObject *));
+
+    Maze.add (NULL);  /* dummy zeroth level */
+
+    /* main branch and town */
+    top = buildBranch (kBunkerRooms, TOWNLEVEL - 1, 1, &tail);
+    town = new shMapLevel (TOWNLEVEL, kTown);
+    Maze.add (town);
+    tail->addDownStairs (-1, -1, town, 7, 3);
+    head = buildBranch (kBunkerRooms, BUNKERLEVELS - TOWNLEVEL, TOWNLEVEL + 1, 
+                        &tail);
+    town->addDownStairs (6, 17, head, -1, -1);
+    /* rabbit level */
+    rabbit = new shMapLevel (BUNKERLEVELS + 1, kRabbit);
+    Maze.add (rabbit);
+    tail->addDownStairs (-1, -1, rabbit, 20, 10);
+    /* radiation caves */
+    cavemouth = Maze.get (CAVEBRANCH);
+    head = buildBranch (kRadiationCave, CAVELEVELS, CAVEBRANCH, &tail);
+    cavemouth->addDownStairs (-1, -1, head, -1, -1);
+    shMonster *bofh = 
+        new shMonster (findAMonsterIlk ("Bastard Operator From Hell"));
+    tail->findSuitableStairSquare (&x, &y);
+    tail->putCreature (bofh, x, y);
+
+    /* mainframe */
+    head = buildBranch (kMainframe, MAINFRAMELEVELS, BUNKERLEVELS + 1, &tail, 
+                        1 /* ascending branch */);
+    head->findSuitableStairSquare (&x, &y);
+    head->putObject (fakes[0], x, y);
+
+    tail->findSuitableStairSquare (&x, &y);
+    tail->putObject (createObject ("Bizarro Orgasmatron", 0), x, y);
+    tail->findSuitableStairSquare (&x, &y);
+    tail->putObject (fakes[1], x, y);
+    tail->findSuitableStairSquare (&x, &y);
+    tail->putObject (fakes[2], x, y);
+    tail->findSuitableStairSquare (&x, &y);
+    tail->putObject (fakes[3], x, y);
+    head->addDownStairs (-1, -1, rabbit, 46, 10);
+    /* sewer */
+    head = buildBranch (kSewer, SEWERLEVELS, TOWNLEVEL + 1, &tail);
+    town->addDownStairs (53, 14, head, -1, -1);
+    /* waste processing plant */
+    plant = new shMapLevel (TOWNLEVEL + SEWERLEVELS, kSewerPlant);
+    plant->putObject (fakes[4], RNG (41, 46), RNG (1, 7));
+    Maze.add (plant);
+    tail->addDownStairs (-1, -1, plant, 3, 2); 
 }
 
 
-//constructor
-
-shMapLevel::shMapLevel (int level, MapType type)
-    : mCrList (), mFeatures (), mExits ()
+void
+shMapLevel::reset ()
 {
-    int x; int y;
-retry:
-    I->debug ("building level %d", level);
+    int x, y;
 
     memset (&mSquares, 0, sizeof (mSquares));
     memset (&mObjects, 0, sizeof (mObjects));
     memset (&mCreatures, 0, sizeof (mCreatures));
+    memset (&mEffects, 0, sizeof (mEffects));
+    memset (&mVisibility, 0, sizeof (mVisibility));
+    mNumEffects = 0;
     for (y = 0; y < MAPMAXROWS; y++) 
         for (x = 0; x < MAPMAXCOLUMNS; x++)
             setMemory (x, y, ' ');
@@ -407,9 +480,20 @@ retry:
     mRows = MAPMAXROWS;
     mColumns = MAPMAXCOLUMNS;
     mRows = 20;
-    mColumns = 60;
+    mColumns = 64;
     mFlags = 0;
     mNumRooms = 1;
+}
+
+//constructor
+
+shMapLevel::shMapLevel (int level, MapType type)
+    : mCrList (), mFeatures (), mExits ()
+{
+    mType = type;
+retry:
+    I->debug ("building level %d", level);
+    reset ();
     mDLevel = level;
 
     switch (type) {
@@ -428,6 +512,14 @@ retry:
     case kRabbit:
         snprintf (mName, 12, "Rabbit Hole");
         buildRabbitLevel ();
+        return;
+    case kSewer:
+        snprintf (mName, 12, "Sewer");
+        buildSewer ();
+        return;
+    case kSewerPlant:
+        snprintf (mName, 12, "SewerPlant");
+        buildSewerPlant ();
         return;
     case kBunkerRooms:
     default:
@@ -476,8 +568,27 @@ shMapLevel::getGuard (int x, int y)
 }
 
 
+shMonster *
+shMapLevel::getDoctor (int x, int y)
+{
+    int i;
+    if (!isInHospital (x, y)) return NULL;
+    
+    for (i = 0; i < mCrList.count (); i++) {
+        shMonster *c = (shMonster *) mCrList.get (i);
+        if (c->isA ("docbot") &&
+            c->mDoctor.mRoomID == mSquares[x][y].mRoomId)
+        {
+            return c;
+        }
+    }
+    return NULL;
+    //return mRooms[mSquares[x][y].mRoomId].mShopKeeper;
+}
+
+
 shObject *
-shMapLevel::findObject (int x, int y, char *ilk)
+shMapLevel::findObject (int x, int y, const char *ilk)
 {
     shObjectVector *v = getObjects (x, y);
     int i;
@@ -513,10 +624,109 @@ shMapLevel::putObject (shObject *obj, int x, int y)
         obj->mLocation = shObject::kFloor;
         obj->mX = x;
         obj->mY = y;
+	obj->mOwner = NULL;
         mObjects[x][y] -> add (obj);
         return 0;
     }
     return -1;
+}
+
+
+void 
+shMapLevel::attractWarpMonsters (int x, int y)
+{
+    shCreature *c;
+    int i;
+
+    for (i = 0; i < mCrList.count (); i++) {
+        c = mCrList.get (i);
+        if (c->isWarpish () && RNG (3)) {
+            int xx = x;
+            int yy = y;
+            if (!findNearbyUnoccupiedSquare (&xx, &yy)) {
+                c->transport (xx, yy, 100);
+            }
+        }
+    }
+}
+
+
+void
+shMapLevel::doorAlarm (shFeature *door)
+{
+    shFeature *f;
+    shVector <shFeature *> flist;
+    shMonsterIlk *ilk = NULL;
+    int cnt = 0;;
+    int i, x, y;
+    int tries = 50;
+
+    door->mDoor &= ~shFeature::kAlarmed;
+
+    alertMonsters (door->mX, door->mY, 50, Hero.mX, Hero.mY);
+
+    if (!RNG (Hero.isLucky () ? 3 : 7))
+        return;
+
+    for (i = 0; i < mFeatures.count (); i++) {
+        f = mFeatures.get (i);
+        switch (f->mType) {
+        case shFeature::kStairsUp: 
+        case shFeature::kStairsDown:
+            flist.add (f);
+        }
+    }
+    //flist.add (door);
+    if (!flist.count ()) 
+        return; //impossible
+    f = flist.get (RNG (flist.count ()));
+    
+    switch (RNG (mDLevel / 8, mDLevel / 3)) {
+    case 0:
+        if (RNG (2)) {
+            I->p ("An away team has been sent to investigate!");
+            ilk = findAMonsterIlk ("redshirt");
+            cnt = NDX (2,2);
+        } else {
+            I->p ("A cylon patrol is coming to investigate!");
+            ilk = findAMonsterIlk ("cylon centurion");
+            cnt = NDX (2,2);
+        }
+        break;          
+    case 1:
+        I->p ("An imperial security detail has been dispatched to investigate!");
+        ilk = findAMonsterIlk ("stormtrooper");
+        cnt = NDX (2,2);
+        break;
+    case 2: 
+        I->p ("A team of troubleshooters has been sent in to investigate!");
+        ilk = findAMonsterIlk ("troubleshooter");
+        cnt = NDX (2,3);
+        break;
+    case 3: 
+    default:
+        ilk = findAMonsterIlk ("security droid"); 
+        if (mDLevel > 10) {
+            I->p ("A squad of security droids is coming to investigate!");
+            cnt = 3;
+        } else {
+            I->p ("A security droid has been sent to investigate!");
+            cnt = 1;
+        }
+        break;
+    }        
+
+    while (cnt-- && tries--) {
+        x = f->mX;
+        y = f->mY;
+        if (0 == Level->findAdjacentUnoccupiedSquare (&x, &y)) {
+            shMonster *m = new shMonster (ilk);
+            m->newDest (door->mX, door->mY);
+            if (Level->putCreature (m, x, y)) {
+                cnt++;
+            }
+        }
+    }
 }
 
 
@@ -527,16 +737,18 @@ shMapLevel::warpCreature (shCreature *c, shMapLevel *newlevel)
     int oldx = c->mX;
     int oldy = c->mY;
 
-    if (c->isHero () && isInShop (c->mX, c->mY)) {
-        Hero.leaveShop ();
-    }
-    removeCreature (c);
+    res = -1;
     do {
-        newlevel->findSquare (&x, &y);
+        newlevel->findUnoccupiedSquare (&x, &y);
         if (newlevel->getFeature (x, y)) {
             /* just to be safe */
             continue;
         }
+        if (c->isHero ()) {
+            Hero.oldLocation (x, y, newlevel);
+            Level = newlevel;
+        }
+        removeCreature (c);
         res = newlevel->putCreature (c, x, y);
         if (1 == res) {
             return 1;
@@ -544,11 +756,11 @@ shMapLevel::warpCreature (shCreature *c, shMapLevel *newlevel)
         }
     } while (-1 == res);
     if (c->isHero ()) {
-        Level = newlevel;
         Hero.checkForFollowers (this, oldx, oldy);
     }
     return 0;
 }
+
 
 shAttack SlammingDoorDamage =
     shAttack (NULL, shAttack::kCrush, shAttack::kSingle, 0, kConcussive, 1, 6);
@@ -564,8 +776,6 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
     if (!isOccupied (x, y)) return 0;
     shCreature *c = getCreature (x, y);
     shFeature *f = getFeature (x, y);
-    char buf[64];
-    c->the (buf, 64);
 
     if (!f) return 0;
     
@@ -579,6 +789,7 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
         I->drawScreen ();
         if (c->isHero ()) {
             f->mTrapUnknown = 0;
+	    Hero.interrupt ();
             if (Hero.reflexSave (NULL, 20 + savedcmod)) {
                 I->p ("The door slams shut!  "
                       "You jump out of the way!");
@@ -586,7 +797,7 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
             }
             I->p ("The door slams shut on you!");
         } else if (Hero.canSee (x, y)) {
-            I->p ("The door slams shut on %s!", buf);
+            I->p ("The door slams shut on %s!", THE (c));
             f->mTrapUnknown = 0;
             f->mTrapMonUnknown = 0;
         } else {
@@ -595,13 +806,14 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
         }
         if (c->sufferDamage (&SlammingDoorDamage)) {
             if (c != &Hero && Hero.canSee (c)) {
-                I->p ("%s is %s!", buf, c->deathVerb ());
+                c->pDeathMessage (THE (c), kSlain);
             }
             c->die (kKilled, "a slamming door");
             return 1;
         }
     } else if (shFeature::kPit == f->mType) {   
         if (c->isHero ()) {
+            Hero.interrupt ();
             if (c->isFlying ()) {
                 if (!f->mTrapUnknown) {
                     I->p ("You fly over a pit.");
@@ -620,7 +832,7 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
                 return 0;
             }
             if (Hero.canSee (x, y)) {
-                I->p ("%s falls into a pit!", buf);
+                I->p ("%s falls into a pit!", THE (c));
                 if (f->mTrapUnknown) {
                     I->drawScreen ();
                     I->pauseXY (x, y);
@@ -630,35 +842,38 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
             }
         }
         c->mTrapped = NDX (2, 6);
+        c->mZ = -1;
         if (c->sufferDamage (&PitTrapDamage)) {
             if (!c->isHero () && Hero.canSee (c)) {
-                I->p ("%s is %s!", buf, c->deathVerb ());
+                c->pDeathMessage (THE (c), kSlain);
             }
             c->die (kMisc, "Fell into a pit");
             return 1;
         }
     } else if (shFeature::kAcidPit == f->mType) {
         if (c->isHero ()) {
+            Hero.interrupt ();
             if (c->isFlying ()) {
                 if (!f->mTrapUnknown) {
                     I->p ("You fly over an acid pit.");
                 }
                 return 0;
             }
+            f->mTrapUnknown = 0;
+            f->mTrapMonUnknown = 0;
             if (Hero.reflexSave (NULL, 20 + savedcmod)) {
                 I->p ("You escape an acid pit trap.");
                 return 0;
             }
             I->p ("You fall into a pit!");
             I->p ("You land in a pool of acid!");
-            f->mTrapUnknown = 0;
             f->mTrapMonUnknown = 0;
         } else {
             if (c->isFlying ()) {
                 return 0;
             }
             if (Hero.canSee (x, y)) {
-                I->p ("%s falls into a pool of acid!", buf);
+                I->p ("%s falls into a pool of acid!", THE (c));
                 if (f->mTrapUnknown) {
                     I->drawScreen ();
                     I->pauseXY (x, y);
@@ -668,15 +883,57 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
             }
         }
         c->mTrapped = NDX (2, 6);
+        c->mZ = -1;
         if (c->sufferDamage (&AcidPitTrapDamage)) {
             if (!c->isHero () && Hero.canSee (c)) {
-                I->p ("%s is %s!", buf, c->deathVerb ());
+                c->pDeathMessage (THE (c), kSlain);
             }
             c->die (kMisc, "Dissolved in acid");
             return 1;
         } else {
             c->setTimeOut (TRAPPED, 1000, 0);
         }
+    } else if (shFeature::kSewagePit == f->mType) {
+        if (c->isHero ()) {
+            if (c->isFlying ()) {
+                return 0;
+            }
+            Hero.interrupt ();
+            if (f->mTrapUnknown)
+                I->p ("You stumble into a deep spot!");
+            if (Hero.reflexSave (NULL, 20 + savedcmod)) {
+                I->p ("You avoid the deep spot.");
+                return 0;
+            }
+            I->p ("You sink under the surface!");
+            if (!c->hasAirSupply () && !c->isBreathless ()) {
+                I->p ("You're holding your breath!");
+                c->mDrowning = c->getCon ();
+            }
+            f->mTrapUnknown = 0;
+            f->mTrapMonUnknown = 0;
+        } else {
+            if (c->isFlying () || c->canSwim ()) {
+                return 0;
+            }
+            if (Hero.canSee (x, y)) {
+                if (!c->hasAirSupply () && !c->isBreathless ()) {
+                    I->p ("%s splashes frantically in the sewage.", THE (c));
+                    c->mDrowning = c->getCon () / 2;
+                } else {
+                    I->p ("%s splashes in the sewage", THE (c));
+                }
+                if (f->mTrapUnknown) {
+                    I->drawScreen ();
+                    I->pauseXY (x, y);
+                }
+                f->mTrapUnknown = 0;
+                f->mTrapMonUnknown = 0;
+            }
+        }
+        c->mTrapped = NDX (2, 6);
+        c->mZ = -1;
+        c->setTimeOut (TRAPPED, 1000, 0);
     } else if (shFeature::kTrapDoor == f->mType) {
         if (c->isHero ()) {
             if (c->isFlying ()) {
@@ -688,29 +945,43 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
             f->mTrapUnknown = 0;
             f->mTrapMonUnknown = 0;
             if (Hero.reflexSave (NULL, 20 + savedcmod)) {
+                Hero.interrupt ();
                 I->p ("You escape a trap door.");
                 return 0;
             }
             I->p ("A trap door opens underneath you!");
             I->drawScreen ();
-            I->pauseXY (Hero.mX, Hero.mY);
         } else {
             if (c->isFlying ()) {
                 return 0;
             }
             if (Hero.canSee (x, y)) {
-                I->p ("A trap door opens underneath %s!", buf);
+                Hero.interrupt ();
+                I->p ("A trap door opens underneath %s!", THE (c));
                 f->mTrapUnknown = 0;
                 f->mTrapMonUnknown = 0;
             }
         }
         {
+            int newx;
+            int newy;
             shMapLevel *dest = this;
             for (dest = getLevelBelow ();
-                 dest->getLevelBelow () && !RNG (3);
+                 dest->getLevelBelow () && !dest->noDig () && !RNG (3);
                  dest = dest->getLevelBelow ())
             ;
-            return warpCreature (c, dest);
+            dest->findUnoccupiedSquare (&newx, &newy);
+            if (c->isHero ()) {
+                Hero.oldLocation (newx, newy, dest);
+                I->pauseXY (Hero.mX, Hero.mY);
+                Level = dest;
+            }
+            removeCreature (c);
+            dest->putCreature (c, newx, newy);
+            if (c->isHero ()) {
+                Hero.checkForFollowers (this, x, y);
+            }
+            return 0;
         }
     } else if (shFeature::kHole == f->mType) {
         if (c->isHero ()) {
@@ -721,35 +992,51 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
                 return 0;
             }
             if (Hero.reflexSave (NULL, 15 + savedcmod)) {
+                Hero.interrupt ();
                 I->p ("You avoid a hole.");
                 return 0;
             }
             I->p ("You fall into a hole!");
-            I->pauseXY (Hero.mX, Hero.mY);
         } else {
             if (c->isFlying ()) {
                 return 0;
             }
             if (Hero.canSee (x, y)) {
-                I->p ("%s falls through a hole!", buf);
+                Hero.interrupt ();
+                I->p ("%s falls through a hole!", THE (c));
             }
         }
         {
+            int newx;
+            int newy;
             shMapLevel *dest = this;
             for (dest = getLevelBelow ();
                  dest->getLevelBelow () && !RNG (3);
                  dest = dest->getLevelBelow ())
             ;
-            return warpCreature (c, dest);
+            dest->findLandingSquare (&newx, &newy);
+            if (c->isHero ()) {
+                Hero.oldLocation (newx, newy, dest);
+                I->pauseXY (Hero.mX, Hero.mY);
+                Level = dest;
+            }
+            removeCreature (c);
+            dest->putCreature (c, newx, newy);
+            if (c->isHero ()) {
+                Hero.checkForFollowers (this, x, y);
+            }
+            return 0;
         }
     } else if (shFeature::kRadTrap == f->mType) {
         if (c->isHero ()) {
+            Hero.interrupt ();
             I->p ("You are bathed in a green glow!");
             f->mTrapUnknown = 0;
             f->mTrapMonUnknown = 0;
         } else {
             if (Hero.canSee (x, y)) {
-                I->p ("%s is bathed in a green glow!", buf);
+                Hero.interrupt ();
+                I->p ("%s is bathed in a green glow!", THE (c));
                 f->mTrapUnknown = 0;
             }
             f->mTrapMonUnknown = 0;
@@ -758,6 +1045,16 @@ shMapLevel::checkTraps (int x, int y, int savedcmod)
             c->die (kMisc, "Radiation trap.");
             return 1;
         }
+    } else if (shFeature::kWeb == f->mType) {
+        if (c->isHero ()) {
+            I->p ("You walk into a web!");
+            f->mTrapUnknown = 0;
+        } else {
+            if (Hero.canSee (x, y)) 
+                f->mTrapUnknown = 0;
+            f->mTrapMonUnknown = 0;
+        }
+        c->mTrapped = NDX (2, 6);
     }
     return 0;
 }
@@ -835,21 +1132,38 @@ shMapLevel::checkDoors (int x, int y)
 }
 
 
-//RETURNS: 0 on success, non-zero if the creature dies
-
+/*RETURNS: 0 on success
+           1 the creature died
+           -1 failed otherwise
+*/
 int
 shMapLevel::moveCreature (shCreature *c, int x, int y)
 {
-    assert (! isOccupied (x, y));
+    if (!isFloor (x, y) || mCreatures[x][y] || isObstacle (x, y)) {
+        return -1;
+    }
+
+    {
+        int i;
+        for (i = TRACKLEN - 1; i > 0; --i) {
+            c->mTrack[i] = c->mTrack[i-1];
+        }
+        c->mTrack[0].mX = c->mX;
+        c->mTrack[0].mY = c->mY;
+    }
 
     mCreatures[c->mX][c->mY] = NULL;
     mCreatures[x][y] = c;
     if (checkDoors (c->mX, c->mY)) return 1;
+    if (&Hero == c) {
+        Hero.oldLocation (x, y, this);
+    }
     c->mLastX = c->mX;
     c->mLastY = c->mY;
     c->mLastLevel = this;
     c->mX = x;
     c->mY = y;
+    c->mZ = 0; //assume on solid ground for now
     c->mLastMoveTime = Clock;
     if (checkTraps (c->mX, c->mY)) return 1;
     if (checkDoors (x, y)) return 1;
@@ -868,36 +1182,48 @@ int
 shMapLevel::putCreature (shCreature *c, int x, int y)
 {
     int killed = 0;
-    if (isFloor (x, y) && NULL == mCreatures[x][y]) {
-        c->mLevel = this;
-        c->mX = x;
-        c->mY = y;
-        c->mLastMoveTime = Clock;
-        mCreatures[x][y] = c;
-        mCrList.add (c);
-        killed = checkDoors (x, y);
-        if (killed) return killed;
-        if (&Hero == c) {
-            Hero.newLocation ();
-            Hero.lookAtFloor ();
-            if (!(kHeroHasVisited & mFlags)) {
-                mFlags |= kHeroHasVisited;
-                if (mDLevel != 1) {
-                    Hero.earnScore (500);
-                }
-                if (mCrList.count () < 3) {
-                    /* we wouldn't want the Hero to be lonely! */
-                    int n = 0;
-                    while (n < 10 + mDLevel / 5) {
-                        n += spawnMonsters ();
-                        if (!RNG (100)) n+= 10; /* in case it's impossible */
-                    }
+
+    if (!isFloor (x, y) || mCreatures[x][y] || isObstacle (x, y)) {
+        return -1;
+    }
+
+    c->mLevel = this;
+    c->mX = x;
+    c->mY = y;
+    c->mZ = 0; //assume on solid ground for now
+    c->mLastMoveTime = Clock;
+    mCreatures[x][y] = c;
+    mCrList.add (c);
+    killed = checkDoors (x, y);
+    if (killed) return killed;
+    if (&Hero == c) {
+        Hero.newLocation ();
+        Hero.lookAtFloor ();
+        if (!(kHeroHasVisited & mFlags)) {
+            mFlags |= kHeroHasVisited;
+            if (mDLevel != 1) {
+                Hero.earnScore (500);
+            }
+            if (isTownLevel () && !Hero.getStoryFlag ("entered town")) {
+                Hero.setStoryFlag ("entered town", 1);
+                Hero.earnScore (500);
+            }
+            if (isMainframe () && !Hero.getStoryFlag ("entered mainframe")) {
+                Hero.setStoryFlag ("entered mainframe", 1);
+                Hero.earnScore (2222);
+            }
+            if (mCrList.count () < 5) {
+                /* we wouldn't want the Hero to be lonely! */
+                int n = 0;
+                int tries = 0;
+                while (n < 10 + mDLevel / 4 && tries < 100) {
+                    n += spawnMonsters ();
+                    tries++;
                 }
             }
         }
-        return 0;
     }
-    return -1;
+    return 0;
 }
 
 
@@ -913,6 +1239,9 @@ shMapLevel::removeCreature (shCreature *c)
     }
     mCreatures[x][y] = NULL;
     checkDoors (x, y);
+    //if (&Hero == c) {
+    //    Hero.oldLocation (x, y, this);
+    //}
     c->mLastX = x;
     c->mLastY = y;
     c->mLastLevel = this;
@@ -957,9 +1286,10 @@ shMapLevel::spawnMonsters ()
             ilk = pickAMonsterIlk (RNG (mDLevel));
         } while (!ilk ||
                  !(kOoze == ilk->mType ||
-                   kAbberation == ilk->mType ||
+                   kAberration == ilk->mType ||
                    kInsect == ilk->mType ||
                    kMutant == ilk->mType ||
+                   kEgg == ilk->mType ||
                    kAlien == ilk->mType ||
                    kBeast == ilk->mType ||
                    (kBot == ilk->mType && RNG (2))));
@@ -969,6 +1299,17 @@ shMapLevel::spawnMonsters ()
             ilk = pickAMonsterIlk (RNG (mDLevel));
         } while (!ilk ||
                  !(kProgram == ilk->mType));
+        break;
+    case kSewer:
+        do {
+            ilk = pickAMonsterIlk (RNG (mDLevel));
+        } while (!ilk ||
+                 !(kOoze == ilk->mType ||
+                   kAberration == ilk->mType ||
+                   kInsect == ilk->mType ||
+                   kVermin == ilk->mType ||
+                   kMutant == ilk->mType ||
+                   !strcmp ("ratbot", ilk->mName)));
         break;
     case kRabbit:
         return 1;
@@ -1014,6 +1355,14 @@ shMapLevel::removeFeature (shFeature *f)
 }
 
 
+void 
+shMapLevel::clearSpecialEffects ()
+{
+    memset (&mEffects, 0, sizeof (mEffects));
+    mNumEffects = 0;
+}
+
+
 void
 shMapLevel::findSuitableStairSquare (int *x, int *y)
 {
@@ -1021,6 +1370,7 @@ shMapLevel::findSuitableStairSquare (int *x, int *y)
     reloop:
         *x = RNG (mColumns);
         *y = RNG (mRows);
+
         if (isInRoom (*x, *y) && 
             !isInShop (*x, *y) &&
             NULL == getFeature (*x, *y))
@@ -1036,7 +1386,13 @@ shMapLevel::findSuitableStairSquare (int *x, int *y)
                         goto reloop;
                     }
                 }
+                break;
             }
+            case kMainframe:
+            case kSewer:
+                if (!stairsOK (*x, *y))
+                    goto reloop;
+                break;
             default:
                 ;
             }
@@ -1098,7 +1454,10 @@ void
 shMapLevel::addDoor (int x, int y, int horiz,
                      int open /* = -1 */, 
                      int lock /* = -1 */,
-                     int secret /* = -1 */)
+                     int secret /* = -1 */,
+                     int alarmed /* = -1 */, 
+                     int magsealed /* = -1*/, 
+                     int retina /* = 0 */)
 {
     shFeature *door = new shFeature ();
 
@@ -1106,19 +1465,31 @@ shMapLevel::addDoor (int x, int y, int horiz,
     door->mY = y;
     door->mDoor = 0;
 
-    /* just in case */
-    SETSQ (x, y, kStoneFloor);
+    if (!isFloor (x, y)) {
+        SETSQ (x, y, kFloor);
+    }
 
     if (-1 == lock) {
         lock = !RNG (13);
     }
+
+    if (-1 == alarmed && lock && mDLevel > 2) 
+        alarmed = !RNG (mDLevel > 8 ? 3 : 13);
+    else 
+        alarmed = 0;
+
     if (-1 == secret) {
         secret = !RNG (10);
     }
-    if (secret) open = 0;
-    if (-1 == open) {
+
+    if (secret) 
+        open = 0;
+    if (-1 == open) 
         open = !RNG (4);
-    }
+
+    if (-1 == magsealed)
+        magsealed = !RNG (22);
+
     if (open) {
         door->mType = shFeature::kDoorOpen;
     } else if (!secret) {
@@ -1143,13 +1514,22 @@ shMapLevel::addDoor (int x, int y, int horiz,
         lock = 1;
     }
 
-    switch (RNG (lock ? 4 : 5)) { /* what kind of locking mechanism */
-    case 0: door->mDoor |= shFeature::kLockRed; break;
-    case 1: door->mDoor |= shFeature::kLockGreen; break;
-    case 2: door->mDoor |= shFeature::kLockBlue; break;
-    case 3: door->mDoor |= shFeature::kLockOrange; break;
-    case 4: break;
+    if (retina) {
+        door->mDoor |= shFeature::kLockRetina;
+    } else {
+        switch (RNG (lock ? 4 : 5)) { /* what kind of locking mechanism */
+        case 0: door->mDoor |= shFeature::kLockRed; break;
+        case 1: door->mDoor |= shFeature::kLockGreen; break;
+        case 2: door->mDoor |= shFeature::kLockBlue; break;
+        case 3: door->mDoor |= shFeature::kLockOrange; break;
+        case 4: break;
+        }
     }
+    
+    if (alarmed)
+        door->mDoor |= shFeature::kAlarmed;
+    if (magsealed)
+        door->mDoor |= shFeature::kMagneticallySealed;
 
     mFeatures.add (door);
 }
@@ -1162,6 +1542,17 @@ shMapLevel::findSquare (int *x, int *y)
     *y = RNG (mRows);
     return 0;
 }
+
+
+int 
+shMapLevel::findLandingSquare (int *x, int *y)
+{
+    do {
+        findUnoccupiedSquare (x, y);
+    } while (!landingOK (*x, *y));
+    return 0;
+}
+
 
 
 int
@@ -1251,7 +1642,7 @@ shMapLevel::findNearbyUnoccupiedSquare (int *x, int *y)
         if (*x < 0) *x = 1;
         if (*y < 0) *y = 1;
         if (*x >= mColumns) *x = mColumns - 2;
-        if (*y >= mRows) *y -= mRows - 2;
+        if (*y >= mRows) *y = mRows - 2;
 
         if ((isFloor (*x, *y)) &&
             (0 == isOccupied (*x, *y)) &&

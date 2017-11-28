@@ -18,7 +18,7 @@ shMapLevel::buildBunkerRoom (int sx, int sy, int ex, int ey)
 
     for (x = sx + 1; x <= ex -1; x++) {
         for (y = sy + 1; y <= ey -1; y++) {
-            SETSQ (x, y, kStoneFloor);
+            SETSQ (x, y, kFloor);
         }
     }
     return 1;
@@ -242,14 +242,29 @@ corridor:
                                   rooms[i].rsy, rooms[i].rey);
 */
                         y = RNG (lo, hi);
+
+                        int dark = RNG (mDLevel + 6) > 7;
                         
                         for (x = sx; x <= ex; x++) {
-                            SETSQ (x, y, kStoneFloor);
+                            SETSQ (x, y, kFloor);
                             SETSQFLAG (x, y, kHallway);
                             if (kStone == GETSQ (x, y - 1))
                               SETSQ (x, y - 1, kHWall);
                             if (kStone == GETSQ (x, y + 1))
                               SETSQ (x, y + 1, kHWall);
+
+                            if (dark) { //NW NE SW SE
+                                setLit (x, y, x > sx ? -1 : 0, 
+                                              x < ex ? -1 : 0, 
+                                              x > sx ? -1 : 0, 
+                                              x < ex ? -1 : 0);
+                                setLit (x, y - 1, 0,  0, 
+                                                  x > sx ? -1 : 0, 
+                                                  x < ex ? -1 : 0);
+                                setLit (x, y + 1, x > sx ? -1 : 0, 
+                                                  x < ex ? -1 : 0,
+                                                  0, 0);
+                            }
                         }
                         addDoor (sx, y, 0);
                         addDoor (ex, y, 0);
@@ -269,13 +284,28 @@ corridor:
                         ey = maxi (rooms[room].rsy, rooms[i].rsy);
                         x = RNG (1 + maxi(rooms[room].rsx, rooms[i].rsx),
                                  mini(rooms[room].rex, rooms[i].rex) - 1);
+
+                        int dark = RNG (mDLevel + 6) > 7;
+
                         for (y = sy; y <= ey; y++) {
-                            SETSQ (x, y, kStoneFloor);
+                            SETSQ (x, y, kFloor);
                             SETSQFLAG (x, y, kHallway);
                             if (kStone == GETSQ (x - 1, y))
                               SETSQ (x - 1, y, kVWall);
                             if (kStone == GETSQ (x + 1, y))
                               SETSQ (x + 1, y, kVWall);
+
+                            if (dark) {
+                                setLit (x, y, y > sy ? -1 : 0, 
+                                              y > sy ? -1 : 0,
+                                              y < ey ? -1 : 0,
+                                              y < ey ? -1 : 0);
+                                setLit (x - 1, y, 0, y > sy ? -1 : 0,  
+                                                  0, y < ey ? -1 : 0);
+                                setLit (x + 1, y, y > sy ? -1 : 0, 0, 
+                                                  y < ey ? -1 : 0, 0);
+                            }
+
                         }
                         addDoor (x, sy, 1);
                         addDoor (x, ey, 1);

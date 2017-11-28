@@ -4,11 +4,13 @@
 struct shFlags Flags;
 
 struct shOption {
-    char *mName;
+    const char *mName;
     int *mValue;
     int mDefault;
 } Options[] = {
     {"vikeys", &Flags.mVIKeys, 0 },
+    {"fadelog", &Flags.mFadeLog, 0 },
+    {"show line of sight", &Flags.mShowLOS, 0 },
     {"autopickup", &Flags.mAutopickup, 0 },
     {"Autopickup Types", NULL, 0 },
     {"$ money ", &Flags.mAutopickupTypes[kMoney], 1 },
@@ -21,6 +23,7 @@ struct shOption {
     {"= ammunition", &Flags.mAutopickupTypes[kProjectile], 1 },
     {"& devices", &Flags.mAutopickupTypes[kDevice], 0 },
     {"/ ray guns", &Flags.mAutopickupTypes[kRayGun], 1 },
+    {"* energy cells", &Flags.mAutopickupTypes[kEnergyCell], 1 },
     {NULL, NULL, 0 }
 };
 
@@ -38,22 +41,26 @@ initializeOptions ()
 void
 shInterface::editOptions ()
 {
-    int i;
+    unsigned int i;
     shMenu menu ("Options", shMenu::kMultiPick);
-    char buf[60];
     char letter = 'a';
+
+    /* This is kludgey.  Only works for boolean options right now */
 
     for (i = 0; Options[i].mName; i++) {
         if (Options[i].mValue) {
-            snprintf (buf, 60, "%s [%s]", Options[i].mName, 
-                      *Options[i].mValue ? "ON" : "OFF");
-            menu.addItem (letter++, buf, (void *) i);
+            menu.addItem (letter++, Options[i].mName, (void *) i, 1, *Options[i].mValue);
         } else {
             menu.addHeader (Options[i].mName);
         }
     }
-    while (menu.getResult ((void **) &i)) {
-        *Options[i].mValue = !*Options[i].mValue;
+
+    for (i = 0; Options[i].mName; i++) {
+        if (Options[i].mValue)
+            *Options[i].mValue = 0;
+    }
+    while (menu.getResult ((const void **) &i)) {
+        *Options[i].mValue = 1;
     }
 }
 

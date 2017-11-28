@@ -6,7 +6,9 @@
 shVector <shObjectIlk *> ToolIlks;
 
 shToolIlk *Computer;
-shToolIlk *EnergyCell;
+shToolIlk *MasterKey;
+shToolIlk *LockPick;
+//shToolIlk *EnergyCell;
 //shToolIlk *EnergyTank;
 shToolIlk *PowerPlant;
 
@@ -25,7 +27,6 @@ useRestrainingBolt (shObject *bolt)
     int x = Hero.mX;
     int y = Hero.mY;
     shMonster *c;
-    char buf[80];
     int difficulty;
 
     dir = I->getDirection ();
@@ -39,13 +40,13 @@ useRestrainingBolt (shObject *bolt)
             return 0;
         }
         c = (shMonster *) Level->getCreature (x, y);
-        if (!c || c->isAlive ()) {
+        if (!c || !c->isRobot ()) {
             I->p ("Restraining bolts only work on bots and droids.");
             return 0;
         }
-        c->the (buf, 80);
         if (c->isPet ()) {
-            I->p ("You've already affixed a restraining bolt to %s.", buf);
+            I->p ("You've already affixed a restraining bolt to %s.", 
+                  THE (c));
             return 0;
         }
 
@@ -56,15 +57,15 @@ useRestrainingBolt (shObject *bolt)
                                             3;
 
         if (c->mCLevel > difficulty && RNG (c->mCLevel) > difficulty) {
-            I->p ("You miss %s.", buf);
+            I->p ("You miss %s.", THE (c));
             c->newEnemy (&Hero);
         } else {
             Hero.useUpOneObjectFromInventory (bolt);
-            I->p ("You attach the restraining bolt to %s.", buf);
-            if (c->isA ("clerkbot")) {
+            I->p ("You attach the restraining bolt to %s.", THE (c));
+            if (c->isA ("clerkbot") || c->isA ("docbot")) {
                 if (1) { /* nice try */
                     I->p ("The restraining bolt is vaporized by %s's "
-                          "anti-shoplifting circuits!", buf);
+                          "anti-shoplifting circuits!", THE (c));
                 }
                 c->newEnemy (&Hero);
             } else {
@@ -86,7 +87,6 @@ makeRepair (shObject *tool)
     shMonster *c;
     shObjectVector *v;
     int score;
-    char buf[80];
 
     score = sportingD20 () + Hero.getSkillModifier (kRepair);
     if (tool->isA ("roll of duct tape")) {
@@ -114,16 +114,19 @@ makeRepair (shObject *tool)
         }
         if ((c = (shMonster *) Level->getCreature (x, y))) {
             /* repair a pet droid */
-            c->the (buf, 80);
-            if (c->isAlive ()) {
-                I->p ("You can't make repairs to %s!", buf);
+            const char *who = THE (c);
+            if (c->isHero ()) {
+                I->p ("You can't make repairs to yourself!");
+                return 0;
+            } else if (c->isAlive ()) {
+                I->p ("You can't make repairs to %s!", who);
                 return 0;
             } else if (c->mHP == c->mMaxHP) {
-                I->p ("%s doesn't appear to be damaged.", buf);
+                I->p ("%s doesn't appear to be damaged.", who);
                 return 0;
             } else if (!c->isPet ()) {
                 I->p ("%s won't cooperate with your attempt to repair it.",
-                      buf);
+                      who);
                 return FULLTURN;
             } else if (score < 15) {
                 I->p ("Your repair attempt is a failure.");
@@ -131,10 +134,10 @@ makeRepair (shObject *tool)
                 c->mHP += score - 15 + RNG (1, 3);
                 if (c->mHP >= c->mMaxHP) {
                     c->mHP = c->mMaxHP;
-                    I->p ("Now %s looks as good as new!", buf);
+                    I->p ("Now %s looks as good as new!", who);
                     Hero.exerciseSkill (kRepair, 3);
                 } else {
-                    I->p ("You repair some of the damage on %s.", buf);
+                    I->p ("You repair some of the damage on %s.", who);
                     Hero.exerciseSkill (kRepair, 1);
                 }
             }
@@ -149,17 +152,14 @@ makeRepair (shObject *tool)
             for (i = 0; i < v->count (); i++) {
                 obj = v->get (i);
                 if (obj->isA (&WreckIlk)) {
-                    obj->the (buf, 80);
-
                     if (nx == Hero.mX && ny == Hero.mY &&
                         -1 == Level->findNearbyUnoccupiedSquare (&nx, &ny))
                     {
-                        obj->an (buf, 80);
-                        I->p ("There is %s here, "
-                              "but you need more room to repair it.", buf);
+                        I->p ("There is %s here, but you need more room "
+                              "to repair it.", AN (obj));
                         break;
                     }
-                    if (I->yn ("Repair %s?", buf)) {
+                    if (I->yn ("Repair %s?", THE (obj))) {
                         if (score < 20) {
                             I->p ("Your repair attempt is a failure.");
                         } else {
@@ -167,7 +167,7 @@ makeRepair (shObject *tool)
 
                             Hero.exerciseSkill (kRepair, 4);
                             Level->putCreature (bot, nx, ny);
-                            I->p ("You bring %s back on-line!", buf);
+                            I->p ("You bring %s back on-line!", THE (obj));
                             v->remove (obj);
                             delete obj;
                         }
@@ -186,6 +186,14 @@ makeRepair (shObject *tool)
                     Hero.exerciseSkill (kRepair, 2);
                     f->mDoor &= ~shFeature::kBerserk;
                     I->p ("You repair the malfunctioning door.");
+                } else {
+                    I->p ("You repair attempt is a failure.");
+                }
+                goto done;
+            } else if (f->isLockBrokenDoor ()) {
+                if (score >= 15) {
+                    f->mDoor &= ~shFeature::kLockBroken;
+                    I->p ("You repair the broken lock.");
                 } else {
                     I->p ("You repair attempt is a failure.");
                 }
@@ -211,15 +219,73 @@ makeRepair (shObject *tool)
 }
 
 
+int
+shHero::useKey (shObject *key, shFeature *door)
+{
+    int elapsed = 0;
+    int locked = door->isLockedDoor ();
+    shObjectIlk *cardneeded = door->keyNeededForDoor ();
+
+    if (cardneeded && (key->isA (MasterKey) ||
+                       key->isA (cardneeded)))
+    {
+        if (key->isA (MasterKey) && !isBlind ())
+            key->setIlkKnown ();
+        I->p ("You swipe your keycard and the door %s.",
+              locked ? "unlocks" : "locks");
+        elapsed = HALFTURN;
+    } else if (key->isA (LockPick)) {
+        int score = sportingD20 () + Hero.getSkillModifier (kOpenLock);
+        if (door->isRetinaDoor ()) 
+            score -= 10;
+        if (!locked) 
+            score += 4;
+        if (score >= 20) {
+            Hero.exerciseSkill (kOpenLock, 2);
+            if (locked)
+                I->p ("You run a bypass on the locking mechanism.");
+            else 
+                I->p ("You lock the door.");
+            elapsed = FULLTURN;
+        } else {
+            if (door->isRetinaDoor ()) 
+                I->p ("It's very difficult to bypass "
+                      "the retina scanner.");
+            if (door->isAlarmedDoor () && score <= 10) {
+                I->p ("You set off an alarm!");
+                Level->doorAlarm (door);
+            } else {
+                I->p ("You fail to defeat the lock.");
+            }
+            return FULLTURN;
+        }
+    } else if (door->isRetinaDoor ()) {
+        I->p ("You need the proper retina to unlock this door.");
+    } else {
+        if (isBlind ())
+            I->p ("Nothing happens.");
+        else 
+            I->p ("You need a %s to %s this door.", cardneeded->mName,
+                  locked ? "unlock" : "lock");
+        return QUICKTURN;
+    }
+    /* TODO: dramatic failure could result in a berserk door? */
+    if (locked) {
+        door->unlockDoor ();
+    } else {
+        door->lockDoor ();
+    }
+    return elapsed;
+}
+
+
 static int
-useKey (shObject *key)
+useKeyTool (shObject *key)
 {
     shDirection dir;
     int x = Hero.mX;
     int y = Hero.mY;
     shFeature *f;
-
-    int elapsed = 0;
 
     dir = I->getDirection ();
     switch (dir) {
@@ -234,14 +300,18 @@ useKey (shObject *key)
             return 0;
         }
         if ((f = Level->getFeature (x, y)) && f->isDoor ()) {
-            int locked = f->isLockedDoor ();
-            shObjectIlk *cardneeded = f->keyNeededForDoor ();
-
+            if (shFeature::kDoorHiddenHoriz == f->mType ||
+                shFeature::kDoorHiddenVert == f->mType)
+            {
+                I->p ("There's no lock there.");
+                return 0;
+            }
             if (f->isLockBrokenDoor ()) {
                 I->p ("The lock on this door is broken.");
                 return QUICKTURN;
             }
-            if (!cardneeded) { 
+            shObjectIlk *cardneeded = f->keyNeededForDoor ();
+            if (!cardneeded && !f->isRetinaDoor ()) { 
                 I->p ("There is no lock on this door.");
                 return QUICKTURN;
             }
@@ -249,37 +319,10 @@ useKey (shObject *key)
                 I->p ("You have to close it first.");
                 return 0;
             }
-            if (!I->yn ("%s it?", locked ? "Unlock" : "Lock")) {
+            if (!I->yn ("%s it?", f->isLockedDoor () ? "Unlock" : "Lock")) {
                 return 0;
             }
-            if (key->isA ("master keycard") ||
-                key->isA (cardneeded))
-            {
-                I->p ("You swipe your keycard and the door %s.",
-                      locked ? "unlocks" : "locks");
-                elapsed = HALFTURN;
-            } else if (key->isA ("lock pick")) {
-                int score = sportingD20 () + Hero.getSkillModifier (kOpenLock);
-                if (score >= 20) {
-                    Hero.exerciseSkill (kOpenLock, 2);
-                    I->p ("You run a bypass on the locking mechanism.");
-                    elapsed = FULLTURN;
-                } else {
-                    I->p ("You fail to defeat the lock.");
-                    return FULLTURN;
-                }
-            } else {
-                I->p ("You need a %s to %s this door.", cardneeded->mName,
-                      locked ? "unlock" : "lock");
-                return QUICKTURN;
-            }
-            /* TODO: dramatic failure could result in a berserk door? */
-            if (locked) {
-                f->unlockDoor ();
-            } else {
-                f->lockDoor ();
-            }
-            return elapsed;
+            return Hero.useKey (key, f);
         }
         I->p ("There's no lock there.");
         return 0;
@@ -310,7 +353,6 @@ useTricorder (shObject *tricorder)
     int x = Hero.mX;
     int y = Hero.mY;
     shMonster *c;
-    char buf[80];
 
     dir = I->getDirection ();
     switch (dir) {
@@ -327,13 +369,63 @@ useTricorder (shObject *tricorder)
             I->p ("You detect no creature there.");
             return 0;
         };
-        c->getDescription (buf, 80);
+        const char *desc = c->getDescription ();
         c->mHidden = 0;
 
-        I->p ("%s HP:%d/%d AC: %d", buf, c->mHP, c->mMaxHP, c->getAC ());
+        I->p ("%s HP:%d/%d AC: %d", desc, c->mHP, c->mMaxHP, c->getAC ());
     }
     return 0; /* takes no time at all! (otherwise it would be pretty useless) */
 }
+
+
+static int
+useDroidCaller (shObject *obj)
+{
+    shCreature *c;
+    shVector <shCreature *> clist;
+    int i;
+
+    I->p ("%s produces a strange whistling sound.", THE (obj));
+
+    for (i = 0; i < Level->mCrList.count (); i++) {
+        c = Level->mCrList.get (i);
+        if (   (obj->isBuggy () && c->isRobot ())
+            || (!obj->isBuggy () && c->isPet ())) 
+        {
+            int x = Hero.mX;
+            int y = Hero.mY;
+            if (!obj->isOptimized ()) {
+                x = x + RNG(7) - 3;
+                y = y + RNG(5) - 2;
+            }
+
+            if (!Level->findNearbyUnoccupiedSquare (&x, &y)) {
+                c->transport (x, y, 100);
+                if (Hero.canSee (c)) {
+                    obj->setIlkKnown ();
+                    if (!c->isPet ()) 
+                        obj->setBugginessKnown ();
+                }
+                if (c->isA ("clerkbot") || 
+                    c->isA ("guardbot") || 
+                    c->isA ("docbot")) 
+                {
+                    clist.add (c);
+                }
+            }
+        }
+    }
+
+    I->drawScreen ();
+    for (i = 0; i < clist.count (); i++)
+        clist.get (i) -> newEnemy (&Hero);
+
+    return HALFTURN;
+}
+
+
+
+
 
 
 /* returns ms elapsed */
@@ -373,6 +465,9 @@ usePortableHole (shObject *obj)
         }
         Hero.useUpOneObjectFromInventory (obj);
         Level->addTrap (x, y, shFeature::kHole);
+        if (Level->isInShop (x, y)) {
+            Hero.damagedShop (x, y);
+        }
         c = Level->getCreature (x, y);
         if (c && !c->isHero ()) {
             c->newEnemy (&Hero);
@@ -388,15 +483,13 @@ usePortableHole (shObject *obj)
 static int
 useOnOffTool (shObject *gc)
 {
-    char buf[64];
-    gc->your (buf, 64);
     if (gc->isActive ()) {
-        I->p ("You turn off %s.", buf);
+        I->p ("You turn off %s.", YOUR (gc));
         gc->resetActive ();
     } else if (Hero.countEnergy () <= 0) {
         I->p ("You're out of juice!");
     } else {
-        I->p ("You turn on %s.", buf);
+        I->p ("You turn on %s.", YOUR (gc));
         gc->setActive ();
     }
     Hero.computeIntrinsics ();
@@ -420,11 +513,6 @@ useTool (shObject *tool)
 void
 initializeTools ()
 {
-    EnergyCell =
-    new shToolIlk ("energy cell", "energy cell", "energy cell", 
-                   kYellow, NULL, 1, kSteel,
-                   kIdentified | kMergeable | kBugProof, 20, kTiny, 10, 1, 
-                   0, NULL, 140);
 /*
     EnergyTank =
     new shToolIlk ("energy tank", "energy tank", "energy tank",
@@ -446,7 +534,7 @@ initializeTools ()
     new shToolIlk ("fusion power plant", "power plant", "power plant",
                    kBrightRed, PowerPlant, 1000, kPlasteel, 
                    kChargeable, 5000, kSmall, 12, 12, 
-                   2500, NULL, 20);
+                   2500, NULL, 10);
     
     new shToolIlk ("roll of duct tape", "roll of duct tape", "roll of duct tape",
                    kGray, NULL, 5, kPlastic,
@@ -467,21 +555,28 @@ initializeTools ()
                    kRed, NULL, 10, kPlastic,
                    kIdentified, 200, kTiny, 2, 2, 
                    180000, useOnOffTool, 50);
-    flashlight->mInUseIntrinsics |= kLightSource;
+    flashlight->mActiveIntrinsics |= kLightSource;
 
     shToolIlk *geigercounter = 
     new shToolIlk ("geiger counter", "electronic gizmo", "electronic gizmo",
                    kBlue, NULL, 300, kSteel,
-                   0, 700, kTiny, 10, 10,
-                   20000, useOnOffTool, 50);
-    geigercounter->mInUseIntrinsics |= kRadiationDetection;
+                   0, 500, kTiny, 10, 10,
+                   20000, useOnOffTool, 75);
+    geigercounter->mActiveIntrinsics |= kRadiationDetection;
 
     shToolIlk *motiontracker =
     new shToolIlk ("motion tracker", "electronic gizmo", "electronic gizmo",
                    kBlue, NULL, 400, kSteel,
-                   0, 700, kTiny, 10, 10,
-                   10000, useOnOffTool, 25);
-    motiontracker->mInUseIntrinsics |= kMotionDetection;
+                   0, 500, kTiny, 10, 10,
+                   10000, useOnOffTool, 50);
+    motiontracker->mActiveIntrinsics |= kMotionDetection;
+
+    new shToolIlk ("droid caller", "electronic gizmo", "electronic gizmo",
+                   kBlue, NULL, 400, kSteel,
+                   0, 500, kTiny, 10, 10,
+                   0, useDroidCaller, 75);
+
+
 /*
     new shToolIlk ("communicator", "communicator", "communicator", 
                    kWhite, NULL, 100, kSilicon,
@@ -496,35 +591,37 @@ initializeTools ()
     new shToolIlk ("red keycard", "keycard", "red keycard", 
                    kRed, NULL, 20, kPlastic,
                    0, 5, kFine, 5, 1,
-                   0, useKey, 15);
+                   0, useKeyTool, 17);
 
     new shToolIlk ("green keycard", "keycard", "green keycard", 
                    kGreen, NULL, 20, kPlastic,
                    0, 5, kFine, 5, 1,
-                   0, useKey, 15);
+                   0, useKeyTool, 17);
 
     new shToolIlk ("blue keycard", "keycard", "blue keycard",
                    kBlue, NULL, 20, kPlastic,
                    kIdentified, 5, kFine, 5, 1,
-                   0, useKey, 15);
+                   0, useKeyTool, 17);
 
     new shToolIlk ("orange keycard", "keycard", "orange keycard",
                    kBrightRed, NULL, 20, 
                    kPlastic,
                    0, 5, kFine, 5, 1,
-                   0, useKey, 15);
+                   0, useKeyTool, 17);
 
+    MasterKey = 
     new shToolIlk ("master keycard", "keycard", "purple keycard",
                    kBrightMagenta, 
                    NULL, 100, kPlastic,
                    0, 5, kFine, 5, 1,
-                   0, useKey, 15);
-
+                   0, useKeyTool, 17);
+    
+    LockPick =
     new shToolIlk ("lock pick", "lock pick", "lock pick",
                    kBlue, 
                    NULL, 200, kPlastic,
                    kIdentified, 60, kFine, 5, 5, 
-                   0, useKey, 20);
+                   0, useKeyTool, 20);
                    
     new shToolIlk ("restraining bolt", "magnetic bolt", "magnetic bolt",
                    kBlue, NULL, 200, kSteel,
@@ -565,9 +662,9 @@ initializeTools ()
 
     new shToolIlk ("portable hole", "portable hole", "portable hole",
                    kBlack,
-                   NULL, 200, kWarpish,
+                   NULL, 200, kCloth,
                    kIdentified | kMergeable, 0, kSmall, 100, 4,
-                   0, usePortableHole, 75);
+                   0, usePortableHole, 50);
 
     shToolIlk *rabbitfoot =
     new shToolIlk ("rabbit's foot", "rabbit's foot", "rabbit's foot",
@@ -580,14 +677,14 @@ initializeTools ()
     new shToolIlk ("heap of space junk", "heap of space junk", "heap of space junk",
                    kBrown, NULL, 5, kPlasteel,
                    0, 50000, kLarge, 10, 50,
-                   0, NULL, 285);
+                   0, NULL, 185);
 
 }
 
 
-shToolIlk::shToolIlk (char *name, 
-                      char *vaguename,
-                      char *appearance, 
+shToolIlk::shToolIlk (const char *name, 
+                      const char *vaguename,
+                      const char *appearance, 
                       shColor color,
                       shToolIlk *parent,
                       int cost,
@@ -642,15 +739,12 @@ createTool (char *desc,
     tool = new shObject ();
 
     tool->mIlk = ilk;
-    if (EnergyCell == ilk) {
-        bugginess = 0;
-        tool->identify ();
-    } else if (tool->isA (PowerPlant)) {
+    if (tool->isA (PowerPlant)) {
         tool->mCharges = RNG (1, 100);
         tool->setChargeKnown ();
     }
    
-    tool->mCount = -22 == count ? EnergyCell == ilk ? NDX (15, 10) : 1 : count;
+    tool->mCount = -22 == count ? 1 : count;
     tool->mBugginess = bugginess;
     tool->mHP = ilk->mHP;
 

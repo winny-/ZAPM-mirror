@@ -69,15 +69,9 @@ shMonster::drinkBeer ()
             mMaxHP = mHP;
         }
         if (Hero.canSee (this)) {
-            char buf[80];
-            char buf2[80];
-            
             obj->setAppearanceKnown ();
-            your (buf, 80);
-            obj->an (buf2, 80);
-            
-            I->p ("%s drinks %s.", buf, buf2);
-            I->p ("%s looks refreshed.", buf);
+            I->p ("%s drinks %s.", your (), obj->an ());
+            I->p ("%s looks refreshed.", your ());
             obj->maybeName ();
             delete obj;
             return 1000;
@@ -225,6 +219,10 @@ shMonster::doPet ()
         val_adjacent = 5;
         val_monst = 5;
     }
+
+    if (isSessile ()) {
+        val_monst += 50;
+    }
     
     n = findSquares (flags, coord, info);
     for (i = 0; i < n; i++) {
@@ -281,10 +279,11 @@ shMonster::doPet ()
             doAttack (c, &elapsed);
             return elapsed;
         }
-
-        return doMove (vectorDirection (mX, mY, 
-                                        coord[best].mX, coord[best].mY));
+        if (!isSessile ())
+            return doMove (vectorDirection (mX, mY, 
+                                            coord[best].mX, coord[best].mY));
     }
+    return 250;
 }
 
 

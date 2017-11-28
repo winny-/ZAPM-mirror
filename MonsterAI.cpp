@@ -30,14 +30,19 @@ shMonster::makeAngry ()
         if (mHP == mMaxHP && isA ("monolith")) {
             return;
         }
-        char buf[60];
-        the (buf, 60);
-        I->p ("%s gets angry!", buf);
+        I->p ("%s gets angry!", the ());
         mDisposition = kHostile;
         mTactic = kNewEnemy;
     }
 }
 
+
+void
+shMonster::newDest (int x, int y)
+{
+    mDestX = x;
+    mDestY = y;
+}
 
 
 /* try to move the creature one square in the given direction
@@ -48,9 +53,6 @@ shMonster::makeAngry ()
 int
 shCreature::doMove (shDirection dir)
 {
-    const int buflen = 40;
-    char buf[buflen];
-    char buf2[buflen];
     int x = mX;
     int y = mY;
     int speed;
@@ -69,14 +71,16 @@ shCreature::doMove (shDirection dir)
         return 100;
     }
 
+    if (mHidden)
+        revealSelf ();
+    
     if (mLevel->isObstacle (x, y)) {
         if (Hero.canSee (this)) {
             if (Hero.canSee (x, y)) {
-                I->p ("You see %s bump into %s", the (buf, buflen),
+                I->p ("%s bumps into %s.", the (),
                       mLevel->getSquare (x, y) -> the ());
             } else {
-                I->p ("You see %s bump into something.", 
-                      the (buf, buflen));
+                I->p ("%s bumps into something.", the ());
             }
         }
         /* you can't tell when an unseen monster bumps into an obstacle even if
@@ -85,27 +89,20 @@ shCreature::doMove (shDirection dir)
     }
     else if (mLevel->isOccupied (x, y)) {
         if (&Hero == mLevel->getCreature (x,y)) {
-            I->p ("%s bumps into you!", the (buf, buflen));
+            I->p ("%s bumps into you!", the ());
         } else if (Hero.canSee (this)) {
             if (Hero.canSee (x, y)) {
-                I->p ("You see %s bump into %s", the (buf, buflen), 
-                      mLevel->getCreature (x, y) -> the (buf2, buflen));
+                I->p ("%s bumps into %s.", the (), 
+                      mLevel->getCreature (x, y) -> the ());
             } else {
-                I->p ("You see %s bump into something.", the (buf, buflen));
+                I->p ("%s bump into something.", the ());
             }
         } else if (Hero.canSee (x, y)) {
-            I->p ("You see something bump into %s", the (buf, buflen));
+            I->p ("Something bumps into %s.", the ());
         }
         return speed / 2;
     }
     else {
-        int i;
-        for (i = TRACKLEN - 1; i > 0; --i) {
-            mTrack[i] = mTrack[i-1];
-        }
-        mTrack[0].mX = mX;
-        mTrack[0].mY = mY;
-
         I->dirty ();
         if (mLevel->moveCreature (this, x, y)) {
             /* we moved and died. */
@@ -181,9 +178,10 @@ shMonster::doQuickMoveTo (shDirection dir /* = kNoDirection */)
             return -1;
         }
         dir = vectorDirection (mX, mY, mDestX, mDestY);
-    }
+        I->debug ("quickmoveto %d, %d", mDestX, mDestY);
+    } 
+//    I->debug ("quickmoveto %s");
 
-    I->debug ("quickmoveto %d, %d", mDestX, mDestY);
     
     dirlist[0] = dir;  /* first try to move directly towards destination */
     dirlist[1] = mDir; /* then try just repeating the last move we made */
@@ -315,24 +313,36 @@ shMonster::findSquares (int flags, shCoord *coord, int *info)
 {
     int n = 0;
     int x, y;
+    
+    int gridbug = isA ("grid bug");
 
-    *info = 0;
     for (y = mY - 1; y <= mY + 1; y++) {
         for (x = mX - 1; x <= mX + 1; x++) {
-            if (mLevel->isInBounds (x, y)) {
-                shFeature *f = mLevel->getFeature (x, y);
-                if (f && f->isDoor () && 
-                         !(f->isOpenDoor () || f->isAutomaticDoor ())) 
+            *info = 0;
+            if (!mLevel->isInBounds (x, y)) 
+                continue;
+
+            if (gridbug && abs (x-mX) + abs (y-mY) > 1){
+                continue;
+            }
+
+            shCreature *c = mLevel->getCreature (x, y);
+            shFeature *f = mLevel->getFeature (x, y);
+            if (f) {
+                if (f->isDoor () && 
+                    !(f->isOpenDoor () || f->isAutomaticDoor ()))
                 {
                     if (flags & kDoor) {
                         *info |= kDoor;
                     } else {
                         continue;
                     }
+                } else if (f->isObstacle ()) {
+                    continue;
                 }
-
-                if (f && f->isTrap () && 
-                    (isPet () ? !f->mTrapUnknown : !f->mTrapMonUnknown)) 
+                
+                if (f->isTrap () && 
+                    (isPet () ? !f->mTrapUnknown : !f->mTrapMonUnknown))
                 {
                     if (isFlying () && (shFeature::kPit == f->mType ||
                                         shFeature::kAcidPit == f->mType ||
@@ -340,58 +350,75 @@ shMonster::findSquares (int flags, shCoord *coord, int *info)
                                         shFeature::kHole == f->mType))
                     {
                         /* this is an acceptable square, keep going */
+                    } else if (canSwim () && 
+                               shFeature::kSewagePit == f->mType)
+                    {
+                        
+                    } else if (f->isBerserkDoor () && mHP > 8) {
+                        /* risk it */
                     } else if (flags & kTrap) {
                         *info |= kTrap;
                     } else {
                         continue;
                     }
                 }
-
-                if (!mLevel->appearsToBeFloor (x, y)) {
-                    if (flags & kWall) {
-                        *info |= kWall;
-                    } else {
-                        continue;
-                    }
+                
+                if (canHideUnder (f) && flags & kHidingSpot) {
+                    *info |= kHidingSpot;
                 }
-
-                shCreature *c = mLevel->getCreature (x, y);
-                if (c == this) {
-
-                } else if (c && c->isHero ()) {
-                    if (flags & kHero) {
-                        *info |= kHero;
-                    } else {
-                        continue;
-                    }
-                } else if (c && !c->isHero ()) {
-                    if (flags & kMonster) {
-                        *info |= kMonster;
-                    } else {
-                        continue;
-                    }
+            }
+            
+            if (!mLevel->appearsToBeFloor (x, y)) {
+                if (flags & kWall) {
+                    *info |= kWall;
+                } else {
+                    continue;
                 }
-
-                if (x == Hero.mX || y == Hero.mY ||
-                    x - y == Hero.mX - Hero.mY ||
-                    x + y == Hero.mX + Hero.mY && 
-                    mLevel->isInLOS (x, y))
-                {
-                    if (flags & kLinedUp) {
-                        *info |= kLinedUp;
-                    } else {
-                        continue;
-                    }
+            } else if (kSewage == mLevel->getSquare (x, y) -> mTerr) {
+                if (canHideUnderWater () && flags & kHidingSpot) {
+                    *info |= kHidingSpot;
                 }
-
-                if (flags & kFreeItem) {
-                    shObjectVector *v = mLevel->getObjects (x, y);
-                    shObject *obj;
-                    int i;
-
-                    if (v) {
+            }
+            
+            if (c == this) {
+                
+            } else if (c && c->isHero ()) {
+                if (flags & kHero) {
+                    *info |= kHero;
+                } else {
+                    continue;
+                }
+            } else if (c && !c->isHero ()) {
+                if (flags & kMonster) {
+                    *info |= kMonster;
+                } else {
+                    continue;
+                }
+            }
+            
+            if ((x == Hero.mX || y == Hero.mY ||
+                 x - y == Hero.mX - Hero.mY ||
+                 x + y == Hero.mX + Hero.mY) 
+                && mLevel->isInLOS (x, y))
+            {
+                if (flags & kLinedUp) {
+                    *info |= kLinedUp;
+                } else {
+                    continue;
+                }
+            }
+            
+            if (flags & kFreeItem || flags & kHidingSpot) {
+                shObjectVector *v = mLevel->getObjects (x, y);
+                shObject *obj;
+                int i;
+                
+                if (v) {
                     for (i = 0; i < v->count (); i++) {
                         obj = v->get (i);
+                        if (canHideUnder (obj)) {
+                            *info |= kHidingSpot;
+                        }
                         if (flags & kFreeMoney && obj->isA (kMoney)) {
                             *info |= kFreeMoney;
                         } else if (flags & kFreeWeapon && 
@@ -400,18 +427,20 @@ shMonster::findSquares (int flags, shCoord *coord, int *info)
                             *info |= kFreeWeapon;
                         } else if (flags &kFreeArmor && obj->isA (kArmor)) {
                             *info |= kFreeArmor;
+                        } else if (flags &kFreeEnergy && 
+                                   obj->isA (kEnergyCell)) 
+                        {
+                            *info |= kFreeEnergy;
                         }                           
                     }
-                    }
                 }
-                
-                coord->mX = x;
-                coord->mY = y;
-                ++coord;
-                ++info;
-                ++n;
-                *info = 0;
             }
+            
+            coord->mX = x;
+            coord->mY = y;
+            ++coord;
+            ++info;
+            ++n;
         }
     }
     return n;
@@ -421,8 +450,14 @@ shMonster::findSquares (int flags, shCoord *coord, int *info)
 void
 shMonster::doRangedAttack (shAttack *atk, shDirection dir)
 {
-    char buf[80];
-    the (buf, 80);
+    const char *buf = the ();
+
+    Hero.interrupt ();
+
+    if (mHidden) {
+        revealSelf ();
+    }
+
     switch (atk->mEffect) {
     case shAttack::kBeam:
         switch (atk->mType) {
@@ -433,8 +468,10 @@ shMonster::doRangedAttack (shAttack *atk, shDirection dir)
         case shAttack::kBreatheTime: I->p ("%s breathes time!", buf); break;
         case shAttack::kBreatheTraffic: 
             I->p ("%s breathes megabytes!", buf); break;
+        case shAttack::kLaser:
+            I->p ("%s shoots a laser!", buf); break;
         }
-        Level->areaEffect (atk, mX, mY, dir, this);
+        Level->areaEffect (atk, NULL, mX, mY, dir, this, 0);
         break;
     default:
         I->debug ("UNIMPLEMENTED RANGED ATTACK");
@@ -454,11 +491,8 @@ shMonster::doRangedAttack (shAttack *atk, shDirection dir)
 int
 shMonster::doAttack (shCreature *target, int *elapsed)
 {
-    const int thebufsize = 40;
-    char t_monster[thebufsize];
-    char t_weapon[thebufsize];
-    
-    the (t_monster, thebufsize);
+    const char *t_monster = the ();
+    const char *t_weapon;
     
     shAttack *atk = NULL;
                 
@@ -475,6 +509,10 @@ shMonster::doAttack (shCreature *target, int *elapsed)
         *elapsed = HALFTURN;
         return -3;
     }
+
+    if (mHidden) {
+        revealSelf ();
+    }
     
     if (NULL == mWeapon) {
         /* randomly pick a physical attack: */
@@ -483,7 +521,7 @@ shMonster::doAttack (shCreature *target, int *elapsed)
         atk = & ((shWeaponIlk *) mWeapon->mIlk) -> mAttack;
     } else {
         if (target->isHero () && Hero.canSee (this)) {
-            mWeapon->her (t_weapon, thebufsize, this);
+            t_weapon = mWeapon->her (this);
             I->p ("%s swings %s at you!", t_monster, t_weapon);
         }
         atk = &ImprovisedObjectAttack;
@@ -494,6 +532,13 @@ shMonster::doAttack (shCreature *target, int *elapsed)
         return -3;
     } else {
         *elapsed = atk->mAttackTime;
+        if (shAttack::kExplode == atk->mType) {
+            if (target->isHero () || Hero.canSee (this)) {
+                I->p ("%s explodes!", t_monster);
+            }
+            die (kSlain, NULL);
+            return -2;
+        }
         return meleeAttack (mWeapon, atk, target->mX, target->mY);
     }
 }
@@ -535,17 +580,23 @@ shMonster::doWander ()
     int res = -1;
     int dist;
     int health = mHP * 3 / mMaxHP;
+    int gridbug = isA ("grid bug");
 
     int val_linedup;
     int val_adjacent;
     int val_near;
     int val_medium;
     int val_far;
-    int val_track;
+    int val_owntrack;   // where this monster has been
+    int val_htrack;     // where the hero has been
     int val_same;
     int val_money;
     int val_weapon;
     int val_armor;
+    int val_energy;
+    int val_crowd = isMultiplier () ? -2 : 0;
+    int val_hidingspot; // obj or feature big enough to hide under */
+
     int elapsed;
     int hasrangedweapon = 0;
 
@@ -560,26 +611,39 @@ shMonster::doWander ()
         val_near = 0;
         val_medium = 0;
         val_far = 0;
-        val_track = -2;
+        val_owntrack = -2;
+        val_htrack = -3;
         val_same = -5;
         val_money = 0;
         val_weapon = 0;
         val_armor = 0;
+        val_energy = 0;
+        val_hidingspot = 0;
+    } else if (getMutantLevel () && RNG (3) && 
+               (res = useMutantPower ())) 
+    {
+         return res;
     } else if (canSee (&Hero) || canSmell (&Hero)) {
         mDestX = Hero.mX;
         mDestY = Hero.mY;
 
-        if (getMutantLevel () && RNG (2)) {
-            res = useMutantPower ();
-            if (res) return res;
+        if (getInt () > 7 && !RNG(3)) {
+            // tell other monsters where the hero is
+            mLevel->alertMonsters (mX, mY, 50, Hero.mX, Hero.mY);
+            I->debug ("  alerting monsters near %d %d", mX, mY);
         }
+
+
         res = readyWeapon ();
         if (-1 != res) {
             return res;
         }
+
         val_money = 0;
-        val_weapon = getInt () > 7 ? 25 : 0;
+        val_weapon = (numHands () && getInt () > 7) ? 35 : 0;
         val_armor = 0;
+        val_energy = (numHands ()) ? 30 : 0;
+        val_hidingspot = canSee (&Hero) ? 0 : 40;
 
         if (mIlk->mRangedAttacks.count () && 
             canSee (&Hero) &&
@@ -591,21 +655,24 @@ shMonster::doWander ()
                 shDirection dir = linedUpDirection (this, &Hero);
                 if (kNoDirection != dir) {
                     doRangedAttack (atk, dir);
+                    return atk->mAttackTime;
                 }
-                return atk->mAttackTime;
             }
             hasrangedweapon = 1;
         }
-
+        
         if (mWeapon && !mWeapon->isMeleeWeapon ()) {
             if (!hasAmmo (mWeapon)) {
                 return readyWeapon ();
             }
 
             int maxrange;
-            if (mWeapon->isThrownWeapon ()) maxrange = 60;
-            else if (mWeapon->isA (kRayGun)) maxrange = 60;
-            else maxrange = 120;
+            if (mWeapon->isThrownWeapon ()) 
+                maxrange = 60; //FIXME: calculate range
+            else if (mWeapon->isA (kRayGun)) 
+                maxrange = 45;
+            else 
+                maxrange = 120;
 
             shDirection dir = linedUpDirection (this, &Hero);
             if (kNoDirection != dir && 
@@ -613,6 +680,9 @@ shMonster::doWander ()
                 canSee (&Hero) &&
                 distance (this, &Hero) < maxrange) 
             {
+                if (mHidden) {
+                    revealSelf ();
+                }
                 if (mWeapon->isThrownWeapon ()) {
                     shObject *obj = removeOneObjectFromInventory (mWeapon);
                     elapsed = throwObject (obj, dir);
@@ -624,52 +694,69 @@ shMonster::doWander ()
                 }
                 return elapsed;
             }
-            flags = kLinedUp;
+
+            if (mHidden) {
+                return HALFTURN;
+            }
+
+            flags = kLinedUp | kDoor;
             val_linedup = 15;    /* try to line up a shot */
             val_adjacent = -10;
             
-            if (health < 1) { /* hurt, retreat */
+            if (isFleeing () || health < 1) { /* hurt, retreat */
                 val_near = 2;
                 val_medium = 1;
                 val_far = 0;
                 val_linedup = -5;
+                val_htrack = -3;
             } else { /* close in for a shot */
                 val_near = 0;
-                val_medium = -1;
-                val_far = 1;
+                val_medium = 1;
+                val_far = -1;
+                val_htrack = 3;
             } 
 
-            val_track = -3;
+            val_owntrack = -3;
             val_same = -2;
         } else {
-            if (areAdjacent (this, &Hero)) {
-                if (-2 == doAttack (&Hero, &elapsed)) {
+            if (areAdjacent (this, &Hero) && !isFleeing ()) {
+                if (gridbug && abs (Hero.mX-mX) + abs (Hero.mY-mY) > 1) {
+                    /* can't attack diagonally */
+                } else if (-2 == doAttack (&Hero, &elapsed)) {
                     return -2;
                 } else {
                     return elapsed;
                 }
             }
-                
-            if (isMultiplier () && !RNG (8) &&
+        
+            if (mHidden) {
+                return HALFTURN;
+            }
+        
+            if (isMultiplier () && !RNG (mHP > 1 ? 6 : 12) &&
                 mLevel->countAdjacentCreatures (mX, mY) < 5 &&
                 mLevel->mCrList.count () < 150) 
             {
                 int x = mX;
                 int y = mY;
                 if (0 == mLevel->findAdjacentUnoccupiedSquare (&x, &y) &&
-                    mLevel->countAdjacentCreatures (x, y) < 4) 
+                    mLevel->countAdjacentCreatures (x, y) < 5) 
                 {
                     shMonster *m = new shMonster (mIlk);
                     if (0 == mLevel->putCreature (m, x, y)) {
-
+                        if (mHP > 1) {
+                            --mHP;
+                            --mMaxHP;
+                        }
+                        //m->mHP = m->mMaxHP = mHP;
                     } else {
                         /* delete m; */
                     }
-                    return FULLTURN;
+                    return LONGTURN;
                 }
             }
 
-            flags = kLinedUp;
+            flags = kLinedUp | kDoor;
             if (hasrangedweapon) {
                 val_linedup = 2;
             } else if (mCLevel < 2) {
@@ -681,53 +768,111 @@ shMonster::doWander ()
             } else {
                 val_linedup = -10;
             }
-            val_adjacent = 30;
-            val_near = -1;
-            val_medium = -1;
-            val_far = -1;
-            val_track = -10;
+
+            if (isFleeing ()) {
+                val_near = 1;
+                val_medium = 1;
+                val_far = 1;
+                val_linedup = -5;
+                val_htrack = -3;
+            } else {
+                val_adjacent = 30;
+                val_near = -1;
+                val_medium = -1;
+                val_far = -1;
+                val_htrack = 3;
+            }
+            val_owntrack = -10;
             val_same = -10;
         } 
-    } else {
+    } else { /* don't know where hero is */
+        if (mHidden) {
+            return HALFTURN;
+        }
+    
+        if (canMimicObjects ()) {
+            mimicSomething ();
+            return FULLTURN;
+        }
+
+        if (mX == mDestX && mY == mDestY) {
+            /* already here, what now? */
+            if (!mLevel->moveForward (mDir, &mDestX, &mDestY)) {
+                mDestX = mX + RNG (13) - 6;
+                mDestY = mY + RNG (9) - 4;
+                mLevel->findNearbyUnoccupiedSquare (&mDestX, &mDestY);
+            }
+        }
+
         flags = kDoor | kLinedUp;
         val_linedup = 0;
         val_adjacent = 0;
-        val_near = -1;
-        val_medium = -1;
+        val_near = -3;
+        val_medium = -2;
         val_far = -1;
-        val_track = -10;
+        val_owntrack = -5;
+        val_htrack = 10;
         val_same = -20;
         val_money = 0;
         val_weapon = numHands () ? 5 : 0;
+        val_energy = (numHands ()) ? 20 : 0;
         val_armor = 0;
-        if (!RNG (10)) { /* wander somewhere new */
+        val_hidingspot = 40;
+        if (!RNG (40)) { /* wander somewhere new */
             mDestX = mX + RNG (13) - 6;
             mDestY = mY + RNG (9) - 4;
             mLevel->findNearbyUnoccupiedSquare (&mDestX, &mDestY);
         } 
     }
 
+    if (mHidden) { /* short circuit the rest of this for now */
+        return HALFTURN;
+    }
+
     if (val_money) flags |= kFreeMoney;
     if (val_weapon) flags |= kFreeWeapon;
     if (val_armor) flags |= kFreeArmor;
+    if (val_energy) flags |= kFreeEnergy;
+    if (val_hidingspot && canHideUnderObjects ()) flags |= kHidingSpot;
 
+    char buffers[3][3][8] = { { "       ", "       ", "       " }, 
+                              { "       ", "   X   ", "       " }, 
+                              { "       ", "       ", "       " } };
+                              
     n = findSquares (flags, coord, info);
     for (i = 0; i < n; i++) {
-        score = 0;
+        char ownt = 0, herot = 0;
+        score = 100;
         if (info[i] & kLinedUp) score += val_linedup;
         if (info[i] & kFreeMoney) score += val_money;
         if (info[i] & kFreeWeapon) score += val_weapon;
         if (info[i] & kFreeArmor) score += val_armor;
+        if (info[i] & kFreeEnergy) score += val_energy;
+        if (info[i] & kHidingSpot) score += val_hidingspot;
         if (!(info[i] & kFreeItem)) {
             int ti;
             for (ti = 0 ; ti < TRACKLEN; ti++) {
                 if (mTrack[ti].mX == coord[i].mX && 
                     mTrack[ti].mY == coord[i].mY) {
-                    score += val_track;
+                    score += val_owntrack;
+                    ownt++;
+                }
+            }
+            for (ti = 0 ; ti < TRACKLEN; ti++) {
+                if (Hero.mTrack[ti].mX == coord[i].mX && 
+                    Hero.mTrack[ti].mY == coord[i].mY) {
+                    score += val_htrack;
+                    herot++;
                 }
             }
             if (coord[i].mX == mX && coord[i].mY == mY) {
-                score += val_same; 
+                if (info[i] & kHidingSpot) {
+                    /* this prevents endless pacing between adjacent
+                       hiding spots */
+                    score += 5;
+                } else {
+                    score += val_same;
+                }
             }
         }
         if (areAdjacent (coord[i].mX, coord[i].mY, mDestX, mDestY))
@@ -736,9 +881,16 @@ shMonster::doWander ()
         if (dist < 25) {
             score += val_near * dist;
         } else if (dist < 50) {
-            score += val_medium * dist;
+            score += val_near * 25 + val_medium * (dist - 25);
         } else {
-            score += val_far * dist;
+            score += val_near * 25 + val_medium * 25 + val_far * (dist - 50);
+        }
+
+        if (val_crowd) {
+            score += val_crowd *
+                mLevel->countAdjacentCreatures (coord[i].mX, coord[i].mY);
+            if (coord[i].mX == mX && coord[i].mY == mY) 
+                score += val_crowd; /* count as adjacent to self */
         }
 /*
         I->debug (" %5d [%2d %2d] %s%s%s", score, coord[i].mX, coord[i].mY,
@@ -746,6 +898,19 @@ shMonster::doWander ()
                   info[i] & kFreeMoney ? "$" : "",
                   info[i] & kFreeWeapon ? ")" : "");
 */
+        
+        {
+            sprintf (buffers[coord[i].mY - mY + 1][(coord[i].mX - mX + 1)],
+                     " % 4d%c", score, 
+                     info[i] & kLinedUp ? 'l' : 
+                     info[i] & kFreeMoney ? '$' :
+                     info[i] & kFreeWeapon ? ')' :
+                     info[i] & kDoor ? '+' : 
+                     ownt ? '_' : 
+                     herot ? 't' : ' ');
+        }
+
+
         if (score > bestscore || 
             (score == bestscore && RNG (2))) 
         {
@@ -754,33 +919,60 @@ shMonster::doWander ()
         }
     }
 
+    I->debug ("  dest: %d %d   Near/Medium/Far %d %d %d", mDestX, mDestY,
+              val_near, val_medium, val_far);
+    for (i = 0; i < 3; i++) 
+        I->debug ("  %7s%7s%7s", buffers[i][0], buffers[i][1], buffers[i][2]);
+
+
     if (-1 == best) {
         /* nothing to do but stay where we are for now */
-        return 500;
+        return HALFTURN;
     }
     if (coord[best].mX == mX && coord[best].mY == mY) {
-        /* try to pick up some junk off the floor */
-        shObjectVector *v;
+        /* apparently, we like where we are, try to do some things here: */
+        shFeature *f = mLevel->getFeature (mX, mY);
+        shObjectVector *v = mLevel->getObjects (mX, mY);
         shObject *obj;
 
-        if (numHands () && 
-            (v = mLevel->getObjects (mX, mY)))
-        {
+        if (!mHidden && mLevel->isWatery (mX, mY) && canHideUnderWater () && !canSee (&Hero)) {
+            mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+            return FULLTURN;
+        }
+
+        if (!mHidden && f && canHideUnder (f) && !canSee (&Hero)) {
+            mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+            return FULLTURN;
+        }
+
+        if (!mHidden && v && canHideUnderObjects () && !canSee (&Hero)) {
             for (i = 0; i < v->count (); i++) {
                 obj = v->get (i);
+                if (canHideUnder (obj)) {
+                    mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+                    return FULLTURN;
+                }
+            }
+        }
+
+        /* try to pick up some junk off the floor */
+        if (!mHidden && v && numHands ()) {
+            for (i = 0; i < v->count (); i++) {
+                obj = v->get (i);
+
+                if (!mHidden && canHideUnder (obj)) {
+                    mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+                    return FULLTURN;
+                }
 
                 if ((info[best] & kFreeMoney && obj->isA (kMoney)) ||
                     (info[best] & kFreeWeapon && obj->isA (kWeapon)) ||
                     (info[best] & kFreeWeapon && obj->isA (kRayGun)) ||
-                    (info[best] & kFreeArmor && obj->isA (kArmor)))
+                    (info[best] & kFreeArmor && obj->isA (kArmor)) ||
+                    (info[best] & kFreeEnergy && obj->isA (kEnergyCell)))
                 {
                     if (Hero.canSee (this)) {
-                        char buf1[40];
-                        char buf2[40];
-                        
-                        the (buf1, 40);
-                        obj->an (buf2, 40);
-                        I->p ("%s picks up %s.", buf1, buf2);
+                        I->p ("%s picks up %s.", the (), AN (obj));
                     }
                     addObjectToInventory (obj);
                     v->remove (obj);
@@ -813,7 +1005,7 @@ shMonster::doHatch ()
     } else if (distance (this, &Hero) <= 15 && 
                !Hero.getStoryFlag ("impregnation"))
     {
-        chance = 5;
+        chance = canSee (&Hero) ? 6 : 22;
     }
     if (!RNG (chance)) {
         shMonster *facehugger = new shMonster (findAMonsterIlk ("facehugger"));
@@ -832,11 +1024,11 @@ shMonster::doHatch ()
 }
 
 
-/* sessile strategy: do nothing until Hero is adjacent, then attack
+/* sitstill strategy: do nothing until Hero is adjacent, then attack
    returns ms elapsed, -2 if the monster dies
 */
 int
-shMonster::doSessile ()
+shMonster::doSitStill ()
 {
     int elapsed;
 
@@ -848,6 +1040,11 @@ shMonster::doSessile ()
         if (-1 == res) return -2;
         if (res) return res;
     }
+
+/* at first, I had sessile creatures attack any monster that was adjacent,
+   but that just resulted in a lot of annoying "you hear combat" messages
+   and fewer monsters for the hero to fight
+*/
     if (Hero.isAdjacent (mX, mY)) {
         if (-2 == doAttack (&Hero, &elapsed)) {
             return -2;
@@ -857,11 +1054,40 @@ shMonster::doSessile ()
     } else {
         return RNG (HALFTURN, LONGTURN);
     }
+}
 
-/* at first, I had sessile creatures attack any monster that was adjacent,
-   but that just resulted in a lot of annoying "you hear combat" messages
-   and fewer monsters for the hero to fight
+
+/* returns -2 if died
+  
 */
+
+int
+shMonster::mimicSomething ()
+{
+    if (canMimicMoney ()) {
+        mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+        mMimic = kObject;
+        mMimickedObject = &MoneyIlk;
+    } else if (canMimicObjects ()) {
+        shObjectIlk *ilk = NULL;
+        int tries = 10;
+        while (!ilk && tries--) {
+            shObject *obj = generateObject (50);
+            if (obj->mIlk->mSize == getSize ()) {
+                ilk = obj->mIlk;
+            }
+            delete obj;
+        }
+
+        if (!ilk) {
+            return 0;
+        }
+
+        mHidden = getSkillModifier (::kHide) + RNG (1, 20) + 10;
+        mMimic = kObject;
+        mMimickedObject = ilk;
+    }
+    return 0;
 }
 
 
@@ -908,7 +1134,7 @@ shMonster::doLurk ()
     I->debug ("  lurk strategy");
     int elapsed;
 
-    if (canSee (&Hero) || canSmell (&Hero)) {
+    if (canSee (&Hero) || (canSmell (&Hero) && !RNG(22))) {
         mStrategy = kWander;
         mTactic = kReady;
         elapsed = readyWeapon ();
@@ -923,14 +1149,14 @@ shMonster::doLurk ()
 
 
 
+#define GD_UNCHALLENGED 0
+#define GD_CHALLENGED   1
+#define GD_JANITOR      2
 
 
 int
 shMonster::doGuard ()
 {
-    char buf[50];
-
-    
     if (isHostile ()) {
         mStrategy = kWander;
         mTactic = kNewEnemy;
@@ -938,35 +1164,111 @@ shMonster::doGuard ()
     }
 
     if (canSee (&Hero)) {
+        const char *the_guard = the ();
         readyWeapon ();
-        the (buf, 50);
         if (mGuard.mToll > 0) {
+            if (Hero.looksLikeJanitor ()) {
+                switch (mGuard.mChallengeIssued) {
+                case 2:
+                    goto done;
+                case 1:
+                    mGuard.mChallengeIssued = 2;
+                    if (Hero.tryToTranslate (this)) {
+                        I->p ("\"Oh, it's you.  Get in there and clean up"
+                              "in aisle 6!\"");
+                    } else {
+                        I->p ("%s emits some gruff beeps.", the_guard);
+                    }
+                    goto done;
+                case 0:
+                default:
+                    mGuard.mChallengeIssued = 2;
+                    if (Hero.tryToTranslate (this)) {
+                        I->p ("\"You may pass, janitor.\"");
+                    } else {
+                        I->p ("%s emits some gruff beeps.", the_guard);
+                    }
+                    goto done;
+                }                    
+            }
+
             if (Hero.mX >= mGuard.mSX && Hero.mX <= mGuard.mEX &&
-                    Hero.mY >= mGuard.mSY && Hero.mY <= mGuard.mEY) 
+                Hero.mY >= mGuard.mSY && Hero.mY <= mGuard.mEY)
             {
-                makeAngry ();
-                if (Hero.tryToTranslate (this)) {
-                    I->p ("\"Intruder alert!\"");
-                } else {
-                    I->p ("%s beeps menacingly.", buf);
+                switch (mGuard.mChallengeIssued) {
+                case 0: /* The Hero somehow slipped past (e.g. transportation)
+                           without the guard issuing a challenge. */
+                    mGuard.mToll *= 2;
+                    if (Hero.tryToTranslate (this)) {
+                        I->p ("\"Halt!  You must pay a fine of %d buckazoids "
+                              "for trespassing!\"", mGuard.mToll);
+                    } else {
+                        I->p ("%s beeps an ultimatum concerning %d "
+                              "buckazoids.", the_guard, mGuard.mToll);
+                    }
+                    break;
+                case 2: /* The Hero was once dressed as a janitor but now 
+                           appears in street clothes. */
+                    mGuard.mToll /= 2;
+                    if (Hero.tryToTranslate (this)) {
+                        I->p ("\"Halt!  You must pay a fine of %d buckazoids "
+                              " for removing your uniform while on duty!\"", 
+                              mGuard.mToll);
+                    } else {
+                        I->p ("%s beeps an ultimatum concerning %d "
+                              "buckazoids.", the_guard, mGuard.mToll);
+                    }
+                    break;
+                case 1: default: /* The Hero ignored the challenge,
+                                    and must be vaporized. */
+                    goto getangry;
                 }
+
+                if (I->yn ("Will you pay?")) {
+                    if (Hero.countMoney () < mGuard.mToll) {
+                        I->p ("You don't have enough money.");
+                    } else {
+                        Hero.loseMoney (mGuard.mToll);
+                        gainMoney (mGuard.mToll);
+                        mGuard.mToll = 0;
+                        if (Hero.tryToTranslate (this)) {
+                            I->p ("\"You may pass.\"");
+                        } else {
+                            I->p ("%s beeps calmly.", the_guard);
+                        }
+                        return FULLTURN;
+                    }
+                }
+            getangry:
+                makeAngry ();
                 mStrategy = kWander;
                 return doWander ();
             }
 
-            
-            if (mGuard.mChallengeIssued) {
+            switch (mGuard.mChallengeIssued) {
+            case 1:
                 goto done;
+            case 2:
+                if (Hero.tryToTranslate (this)) {
+                    I->p ("\"If you're not on duty, you must pay %d "
+                          "buckazoids to pass this way.\"", mGuard.mToll);
+                } else {
+                    I->p ("%s emits some intimidating beeps about %d "
+                          "buckazoids.", the_guard, mGuard.mToll);
+                }
+                break;
+            case 0:
+            default:
+                if (Hero.tryToTranslate (this)) {
+                    I->p ("\"Halt!  You must pay a toll of %d buckazoids "
+                          "to pass this way.\"", mGuard.mToll);
+                } else {
+                    I->p ("%s emits some intimidating beeps about %d "
+                          "buckazoids.", the_guard, mGuard.mToll);
+                }
             }
             mGuard.mChallengeIssued = 1;
             
-            if (Hero.tryToTranslate (this)) {
-                I->p ("\"Halt!  You must pay a toll of %d buckazoids "
-                      "to pass this way.\"", mGuard.mToll);
-            } else {
-                I->p ("%s emits some intimidating beeps about %d "
-                      "buckazoids.", buf, mGuard.mToll);
-            }
             if (I->yn ("Will you pay?")) {
                 if (Hero.countMoney () < mGuard.mToll) {
                     I->p ("You don't have enough money.");
@@ -977,13 +1279,14 @@ shMonster::doGuard ()
                     if (Hero.tryToTranslate (this)) {
                         I->p ("\"You may pass.\"");
                     } else {
-                        I->p ("%s beeps calmly.", buf);
+                        I->p ("%s beeps calmly.", the_guard);
                     }
                 }
             }
         }
     } else {
-        mGuard.mChallengeIssued = 0;
+        if (mGuard.mToll > 0 && 1 == mGuard.mChallengeIssued) 
+            mGuard.mChallengeIssued = 0;
     }
 done:
     return FULLTURN;
@@ -994,22 +1297,30 @@ done:
 void
 shMonster::takeTurn ()
 {
-    const int thebufsize = 40;
-    char t_monster[thebufsize];
+    const char *t_monster;
     int elapsed;
     int couldsee = Hero.canSee (this);
 
     /* decide what to do on the monster's turn */
 
-    the (t_monster, thebufsize);
+    t_monster =  the ();
 
     if (mLevel != Hero.mLevel) {
         /* we'll be reawakened when the Hero returns to our level. */
         mState = kWaiting;
         return;
     }
-    I->debug ("* %p %s @ %d, %d has %d AP:", this, t_monster,
+    I->debug ("* %p %s @ %d, %d has %d AP:", this, getDescription (),
               mX, mY, mAP);
+
+    if (hasAutoRegeneration ()) {
+        if (MAXTIME == mLastRegen) 
+            mLastRegen = Clock;
+        while (Clock - mLastRegen > 1000) {
+            if (mHP < mMaxHP) ++mHP;
+            mLastRegen += 1000;
+        }
+    }
 
     if (checkTimeOuts ()) {
         return;
@@ -1018,21 +1329,44 @@ shMonster::takeTurn ()
     if (isAsleep ()) {
         elapsed = FULLTURN;
     } else if (isTrapped ()) {
+        /* FIXME: should still be able to attack adjacent hero sometimes */
         if (Hero.canSee (this)) {
             shFeature *f = mLevel->getFeature (mX, mY);
             if (f) f->mTrapUnknown = 0;
-        }
-        if (0 == --mTrapped && Hero.canSee (this)) {
-            I->p ("%s frees %s from the trap", 
-                  t_monster, herself ());
+            if (shMonster::kSitStill != mStrategy && 0 == --mTrapped) {
+                if (f) {
+                    switch (f->mType) {
+                    case shFeature::kPit:
+                        I->p ("%s climbs out of the pit.", t_monster); break;
+                    case shFeature::kAcidPit:
+                        I->p ("%s climbs out of the acid filled pit.",
+                              t_monster); 
+                        break;
+                    case shFeature::kSewagePit:
+                        I->p ("%s swims to shallow sewage.", t_monster); break;
+                    case shFeature::kWeb:
+                        I->p ("%s frees %s from the web.", 
+                              t_monster, herself ());
+                        break;
+                    default:
+                        I->p ("%s frees %s from %s.",  
+                              t_monster, herself (), THE (f));
+                    } 
+                }
+            }
         }
         elapsed = FULLTURN;
     } else if (isStunned () || 
                (isConfused () && RNG (2))) 
     {
-        /* move at random */
-        shDirection dir = (shDirection) RNG (8);
-        elapsed = doMove (dir);
+        if (shMonster::kSitStill == mStrategy) {
+            /* do nothing */
+            elapsed = FULLTURN;
+        } else {
+            /* move at random */
+            shDirection dir = (shDirection) RNG (8);
+            elapsed = doMove (dir);
+        }
     } else if (isParalyzed ()) {
         elapsed = NDX (2, 6) * 100;
     } else if (-1 != mEnemyX) {
@@ -1045,18 +1379,18 @@ shMonster::takeTurn ()
             elapsed = doHide (); break;
         case shMonster::kLurk:
             elapsed = doLurk (); break;
-        case shMonster::kSessile:
-            elapsed = doSessile (); break;
+        case shMonster::kSitStill:
+            elapsed = doSitStill (); break;
         case shMonster::kHatch:
             elapsed = doHatch (); break;
-        case shMonster::kPassive:
-            elapsed = FULLTURN; break;
         case shMonster::kShopKeep:
             elapsed = doShopKeep (); break;
         case shMonster::kAngryShopKeep:
             elapsed = doAngryShopKeep (); break;
         case shMonster::kGuard:
             elapsed = doGuard (); break;
+        case shMonster::kDoctor:
+            elapsed = doDoctor (); break;
         case shMonster::kWander:
         default:
             elapsed = doWander (); break;
@@ -1101,7 +1435,7 @@ shMonster::needsWeapon ()
 }
 
 
-static char* weaponpreferences[] = {
+static const char* weaponpreferences[] = {
     "disintegration ray gun",
     "railgun",
     "freeze ray gun",
@@ -1110,7 +1444,7 @@ static char* weaponpreferences[] = {
     "gatling cannon",
     "laser cannon",
     "gamma ray gun",
-    "gauss ray gun",
+//    "gauss ray gun",
     "boltgun",
     "pulse rifle",
     "sniper rifle",
@@ -1118,15 +1452,19 @@ static char* weaponpreferences[] = {
     "frag grenade",
     "stun grenade",
     "shotgun",
-    "phaser",
-    "blaster",
     "laser rifle",
+    "assault pistol",
+    "blaster",
+    "phaser",
     "pistol",
     "laser pistol",
     "pea shooter",
     "light saber",
     "katana",
-    "tazer",
+    "chainsaw",
+    "pair of nunchucks",
+    "cattle prod",
+    "mop",
     "anal probe",
     "club",
     "knife",
@@ -1162,7 +1500,7 @@ shMonster::readyWeapon ()
             continue;
         }
 
-        if (obj->isA ("stasis ray gun" ) && !Hero.isParalyzed ()) {
+        if (obj->isA ("stasis ray gun" ) && !Hero.isParalyzed () && !Hero.isAsleep ()) {
             best = obj;
             break;
         }
@@ -1172,11 +1510,13 @@ shMonster::readyWeapon ()
                 best = obj;
             }
         }
-        if (!best) {
+        if (!best && 
+            !obj->isA (kRayGun))  /* don't accidentaly use helpful ray guns! */
+        {
             /* somehow we fell through here because a weapon isn't in the
                the preferences list
              */
-            best = obj;
+            best = obj; 
         }
     }
 
@@ -1185,7 +1525,7 @@ shMonster::readyWeapon ()
             return -1;
         }
         wield (best);
-        return 100;
+        return FULLTURN;
     } else {
         wield (NULL);
         return -1;
@@ -1207,6 +1547,38 @@ shMapLevel::makeNoise (int x, int y, int radius)
             (d < 2 * radius && RNG(2)))
         {
             /* do something to wakeup the mosnter*/    
+        }
+    }
+}
+
+
+void
+shMapLevel::alertMonsters (int x, int y, int radius, 
+                           int destx, int desty)
+{
+    shCreature *c;
+    int i,d;
+    
+    for (i = 0; i < mCrList.count (); i++) {
+        c = mCrList.get (i);
+        d = distance (x, y, c->mX, c->mY);
+        if (d < radius ||
+            (d < 2 * radius && RNG(2)))
+        {
+            if (!c->isHero () && c->isHostile () && !c->isPet () && 
+                !c->isFleeing () && !c->isAsleep ()) 
+            {
+                shMonster *m = (shMonster *) c;
+                if (m->getInt () < 5)
+                    continue;
+
+                if (!m->canSee (&Hero)) {
+                    if (shMonster::kLurk == m->mStrategy)
+                        m->mStrategy = shMonster::kWander;
+                    m->mDestX = destx + RNG (9) - 4;
+                    m->mDestY = desty + RNG (7) - 3;
+                }
+            }
         }
     }
 }

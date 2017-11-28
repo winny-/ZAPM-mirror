@@ -3,18 +3,16 @@
 
 void initializeOptions ();
 
-int
-newGame ();
+int nameOK (const char *name);
 
-int
-loadGame ();
+int newGame (const char *name);
 
-int
-saveGame ();
+int loadGame (const char *name);
 
-void
-gameLoop ();
+int saveGame ();
 
+void gameLoop ();
 
+/* exitZapm(const code)  declared in Global.h */
 
 #endif

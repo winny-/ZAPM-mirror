@@ -7,9 +7,14 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <errno.h>
+#include <ctype.h>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -51,9 +56,9 @@ safeWrite (int fd, void *ptr, size_t len)
     safeRead ((_fd), (void *) (_ptr), (_len))
 
 #define SWRITEBLOCK(_fd, _p1, _p2) \
-    SWRITE (_fd, _p1, ((unsigned long) _p2 - (unsigned long) _p1));
+    SWRITE ((_fd), (_p1), ((char *) _p2) - ((char *) _p1));
 #define SREADBLOCK(_fd, _p1, _p2) \
-    SREAD (_fd, _p1, ((unsigned long) _p2 - (unsigned long) _p1));
+    SREAD ((_fd), (_p1), ((char *) _p2) - ((char *) _p1)); 
 
 
 #if 0
@@ -160,7 +165,7 @@ savePointer (int fd, void *ptr)
 
 
 static void
-    loadPointer (int fd, void **ptr, char *msg)
+loadPointer (int fd, void **ptr, const char *msg)
 {
     int id;
 
@@ -270,6 +275,8 @@ saveIlks (int fd)
     SWRITE (fd, RayGunData, sizeof (RayGunData));
     SWRITE (fd, JumpsuitData, sizeof (JumpsuitData));
     SWRITE (fd, BeltData, sizeof (BeltData));
+    
+    SWRITE (fd, MedicalProcedureData, sizeof (MedicalProcedureData));
 }
 
 static void
@@ -281,6 +288,8 @@ loadIlks (int fd)
     SREAD (fd, RayGunData, sizeof (RayGunData));
     SREAD (fd, JumpsuitData, sizeof (JumpsuitData));
     SREAD (fd, BeltData, sizeof (BeltData));
+
+    SREAD (fd, MedicalProcedureData, sizeof (MedicalProcedureData));
 }
 
 static void
@@ -303,7 +312,7 @@ loadInt (int fd)
 }
 
 static void
-saveString (int fd, char *str)
+saveString (int fd, const char *str)
 {
     saveMagic (fd, 22);
 
@@ -316,7 +325,7 @@ saveString (int fd, char *str)
 }
 
 static void
-loadString (int fd, char **str)
+loadString (int fd, const char **str)
 {
     loadMagic (fd, 22);
 
@@ -325,9 +334,9 @@ loadString (int fd, char **str)
     if (0 == len) {
         *str = NULL;
     } else {
-        *str = (char *) malloc (len + 1);
+        *str = (const char *) malloc (len + 1);
         SREAD (fd, *str, len);
-        (*str)[len] = 0;
+        ((char *)(*str))[len] = 0;
     }
 }
 
@@ -447,6 +456,7 @@ shCreature::saveState (int fd)
 
     saveInt (fd, mX);
     saveInt (fd, mY);
+    saveInt (fd, mZ);
     savePointer (fd, mLevel);
     saveInt (fd, mIlk->mId);
 
@@ -469,7 +479,16 @@ shCreature::saveState (int fd)
     for (i = 0; i < shImplantIlk::kMaxSite; i++) {
         savePointer (fd, mImplants[i]);
     }
+    switch (mMimic) {
+    case kObject:  saveInt (fd, mMimickedObject->mId); break;
+    case kFeature: saveInt (fd, mMimickedFeature); break;
+    case kMonster: saveInt (fd, mMimickedMonster->mId); break;
+    case kNothing: 
+    default: 
+        saveInt (fd, 0); break;
+    }
     
+
     n = mTimeOuts.count ();
     SWRITE (fd, &n, sizeof (int));
     for (i = 0; i < n; i++) {
@@ -509,6 +528,7 @@ shCreature::loadState (int fd)
 
     mX = loadInt (fd);
     mY = loadInt (fd);
+    mZ = loadInt (fd);
     loadPointer (fd, (void **) &mLevel, "c.mLevel");
     i = loadInt (fd);
     mIlk = MonsterIlks.get (i);
@@ -532,6 +552,14 @@ shCreature::loadState (int fd)
     loadPointer (fd, (void **) &mBelt, "c.mBelt");
     for (i = 0; i < shImplantIlk::kMaxSite; i++) {
         loadPointer (fd, (void **) &mImplants[i], "c.mImplants");
+    }
+    switch (mMimic) {
+    case kObject: mMimickedObject = ObjectIlks.get (loadInt (fd)); break;
+    case kFeature: mMimickedFeature = (shFeature::Type) loadInt (fd); break;
+    case kMonster: mMimickedMonster = MonsterIlks.get (loadInt (fd)); break;
+    case kNothing: 
+    default: 
+        loadInt (fd); break;
     }
     
     SREAD (fd, &n, sizeof (int));
@@ -595,6 +623,7 @@ shHero::saveState (int fd)
     saveInt (fd, mXP);
     saveInt (fd, mScore);
     saveInt (fd, mBusy);
+    saveInt (fd, mSkillPoints);
     
     n = mStoryFlags.count ();
     saveInt (fd, n);
@@ -621,7 +650,8 @@ shHero::loadState (int fd)
     mXP = loadInt (fd);
     mScore = loadInt (fd);
     mBusy = loadInt (fd);
-    
+    mSkillPoints = loadInt (fd);
+
     n = loadInt (fd);
     for (i = 0; i < n; i++) {
         shStoryFlag *sf = new shStoryFlag ();
@@ -912,22 +942,62 @@ shMonsterSpawnEvent::saveState (int fd)
 #endif
 
 
+int
+nameOK (const char *name)
+{
+    int fd;
+    char filename[ZAPM_PATH_LENGTH];
+    const char *p;
+
+    if (strlen (name) > HERO_NAME_LENGTH || 
+        strlen (name) < 1 ||
+        isspace (name[0]))
+    {
+        return 0;
+    }
+    for (p = name; *p; p++) {
+        if (!isprint (*p) || '/' == *p || '\\' == *p) 
+            return 0;; 
+    }
+        
+
+    snprintf (filename, sizeof(filename)-1, "%s/%s.tmp", DataDir, name);
+    fd = open (filename, O_CREAT | O_WRONLY | O_EXCL | O_BINARY, 
+#ifdef _WIN32
+               S_IWRITE | S_IREAD);
+#else
+               S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+#endif
+    if (-1 == fd) {
+		I->debug ("nameOK() couldn't create file %s:%d", filename, errno);
+        return 0;
+    } 
+    close (fd);
+    unlink (filename);
+    return 1;
+}
+
+
 
 /* returns 0 on success, -1 on failure*/
 int
 saveGame ()
 {
     int fd;
-    char savename[200];
+    char savename[ZAPM_PATH_LENGTH];
     int success = -1;
     PtrList.reset ();
     UpdateList.reset ();
 
-    snprintf (savename, 200, "%s/%d.sav", DataDir, getuid ());
+    snprintf (savename, sizeof(savename)-1, "%s/%s.sav", DataDir, Hero.mName);
     
 retry:
     fd = open (savename, O_CREAT | O_WRONLY | O_EXCL | O_BINARY, 
+#ifdef _WIN32
+               S_IWRITE | S_IREAD);
+#else
                S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+#endif
 
     if (-1 == fd) {
         if (EEXIST == errno) {
@@ -958,6 +1028,7 @@ retry:
         }
     }
 
+    I->p("Saving...");
     saveHeader (fd);
 
     saveInt (fd, Clock);
@@ -976,13 +1047,16 @@ retry:
 
 /* returns 0 on success, -1 on failure*/
 int
-loadGame ()
+loadGame (const char* name)
 {
     int fd;
-    char savename[200];
+    char savename[ZAPM_PATH_LENGTH];
     int success = -1;
 
-    snprintf (savename, 40, "%s/%d.sav", DataDir, getuid ());
+    if (!name) 
+        name = getenv ("USER");
+
+    snprintf (savename, sizeof(savename)-1, "%s/%s.sav", DataDir, name);
     
     fd = open (savename, O_RDONLY | O_BINARY, 0);
 
@@ -996,7 +1070,7 @@ loadGame ()
         close (fd);
         if (!I->yn ("Erase it and start a new game?")) {
             delete I;
-            exit (0);
+            exitZapm (0);
         }
         unlink (savename);
         return -1;

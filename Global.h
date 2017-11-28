@@ -16,7 +16,7 @@ third number:  incremented with bug fix releases that don't affect gameplay
 
 **************************************************************************/
 
-#define ZAPM_VERSION "0.6.3"
+#define ZAPM_VERSION "0.8.2"
 
 #define SH_DEBUG
 
@@ -27,9 +27,29 @@ int snprintf (char *str, size_t size, const char *format, ...);
 int vsnprintf (char *str, size_t size, const char *format, va_list ap);
 #endif
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN 
+/* hope there aren't any vulnerabilities in my printfs! */
+#define _CRT_SECURE_NO_DEPRECATE 1
+#define _CRT_SECURE_NO_WARNINGS 1
+#define snprintf _snprintf
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#define strdup _strdup
+#define open _open
+#define close _close
+#define read _read
+
+#undef SH_DEBUG
+#endif
+
 
 #include <assert.h>
+#ifdef _WIN32
+#define DATADIR "user"
+#else
 #include "config.h"
+#endif
 
 typedef signed int shTime;    //ms
 #define MAXTIME 99999999 /*so sloppy*/
@@ -44,7 +64,7 @@ typedef signed int shTime;    //ms
 struct shInterface;
 class shMenu;
 class shCreature;
-class shMonsterIlk;
+struct shMonsterIlk;
 class shMonster;
 struct shObjectIlk;
 struct shObject;
@@ -70,11 +90,14 @@ enum shObjectType
     kFood,
     kDevice,
     kRayGun,
+    kEnergyCell,
     kMaxObjectType
 };
 
 struct shFlags {
     int mVIKeys;
+    int mFadeLog;
+    int mShowLOS;
     int mAutopickup;
     int mAutopickupTypes[kMaxObjectType];
 };
@@ -189,6 +212,7 @@ enum shMutantPower {
     kOpticBlast,
     kHaste,
     kTelepathyPower,
+    kShootWebs,
     kMentalBlast,
     kPyrokinesis,
     kRestoration,
@@ -202,13 +226,51 @@ enum shMutantPower {
     kHallucinate,
     kTerrify,
     kDarkness,
+    kCeaseAndDesist,
+    kSeizeEvidence,
+    kSueForDamages,
+    kSummonWitness,
     kMaxMutantPower
 };
 
+
+enum shFeat {
+    kNoFeat =           0x000,
+    kMimicMoney =       0x001,
+    kMimicObject =      0x002,
+    kMimicFeature =     0x004,
+    kHideUnderObject =  0x008,
+    kExplosive =        0x010,
+    kSessile =          0x020,
+    kNoTreasure =       0x040,
+    kUniqueMonster =    0x080,
+    kWarpish =          0x100,
+    kMaxFeat,
+};
+
+
 const char *getMutantPowerName (shMutantPower id);
+
+struct shMedicalProcedureDescData {
+    char mDesc[40];
+    int mNameKnown;
+};
+extern struct shMedicalProcedureDescData MedicalProcedureData[10]; 
+enum MedicalProcedures {
+    kMedHealing = 0,
+    kMedRestoration,
+    kMedRectalExam,
+    kMedDiagnostics,
+    kMedRadPurification,
+    kMedCaesareanSection,
+    kMedMaxService
+};
 
 
 #include "Event.h"
+
+void exitZapm (const int code); /* defined in Game.cpp */
+
 
 extern int GameOver;
 
@@ -226,6 +288,9 @@ extern shFlags Flags;
 #define DATADIR "/usr/games/lib/zapmdir/"
 #endif
 
-extern char DataDir[256];
+#define HERO_NAME_LENGTH 14
+#define ZAPM_PATH_LENGTH 1024 /* apparently, don't believe PATH_MAX */
+
+extern char DataDir[ZAPM_PATH_LENGTH];
 
 #endif

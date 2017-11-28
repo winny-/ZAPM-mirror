@@ -9,10 +9,10 @@
 
 struct shStoryFlag 
 { 
-    char *mName;
+    const char *mName;
     int mValue; 
     shStoryFlag () {}
-    shStoryFlag (char *name, int value) 
+    shStoryFlag (const char *name, int value) 
     { 
         mName = strdup (name);
         mValue = value; 
@@ -27,6 +27,7 @@ class shHero : public shCreature
     int mXP;
     int mScore;
     int mBusy;
+    int mSkillPoints;
     shVector <shStoryFlag *> mStoryFlags;
     
  public:
@@ -37,19 +38,19 @@ class shHero : public shCreature
 
     int isHero () { return 1; }
 
-    void init (char *name, shProfession *profession);
+    void init (const char *name, shProfession *profession);
 
-    char *the (char *buff, int buflen);
-    char *an (char *buff, int buflen);
-    char *your (char *buff, int buflen);
-    char *getDescription (char *buff, int len);
+    const char *the ();
+    const char *an ();
+    const char *your ();
+    const char *getDescription ();
 
     int numHands () { return mIlk->mNumHands; }
 
-    int die (shCauseOfDeath how, char *killer = NULL);
+    int die (shCauseOfDeath how, const char *killer = NULL);
     int die (shCauseOfDeath how, shCreature *killer);
-    void deathMessage (char *buf, int len, 
-                       shCauseOfDeath how, char *killer = NULL);
+    void epitaph (char *buf, int len, 
+                  shCauseOfDeath how, const char *killer = NULL);
     void tallyScore ();
     void tomb (char *message);
     void logGame (char *message);
@@ -63,9 +64,10 @@ class shHero : public shCreature
     void earnScore (int points);
     void gainAbility ();
 
+    void oldLocation (int newX, int newY, shMapLevel *newLevel);
     void newLocation ();
     void lookAtFloor (int menuok = 0);
-    int getStoryFlag (char *name) { 
+    int getStoryFlag (const char *name) { 
         int i;
         for (i = 0; i < mStoryFlags.count (); i++) {
             if (0 == strcmp (name, mStoryFlags.get (i) -> mName)) {
@@ -75,7 +77,7 @@ class shHero : public shCreature
         return 0;
     }
 
-    void setStoryFlag (char *name, int value) {
+    void setStoryFlag (const char *name, int value) {
         int i;
         for (i = 0; i < mStoryFlags.count (); i++) {
             if (0 == strcmp (name, mStoryFlags.get (i) -> mName)) {
@@ -86,11 +88,13 @@ class shHero : public shCreature
         mStoryFlags.add (new shStoryFlag (name, value));
     }
 
-    void resetStoryFlag (char *name) {
+    void resetStoryFlag (const char *name) {
         setStoryFlag (name, 0);
     }
 
-    shObject *quickPickItem (shObjectVector *v, char *action, 
+    int looksLikeJanitor ();
+
+    shObject *quickPickItem (shObjectVector *v, const char *action, 
                              int flags, int *count = NULL);
 
     int interrupt ();  /* returns 0 if hero was busy */
@@ -103,24 +107,38 @@ class shHero : public shCreature
 
     void enterShop ();    
     void leaveShop ();
+    void damagedShop (int x, int y);
     void pickedUpItem (shObject *obj);
     void usedUpItem (shObject *obj, int cnt, const char *action);
     void maybeSellItem (shObject *obj);
     void payShopkeeper ();
 
+    void enterHospital ();    
+    void leaveHospital ();
+    void payDoctor (shMonster *doctor);
+
+    void enterCompactor ();    
+    void leaveCompactor ();
+
+    void doDiagnostics ();
+
     void checkForFollowers (shMapLevel *level, int sx, int sy);
     int displace (shCreature *c);
     int doMove (shDirection dir);
+    int tryToEscapeTrap ();
     void drop (shObject *obj);
     int kick (shDirection dir);
     void reorganizeInventory ();
     void listInventory ();
     void feel (int x, int y, int force = 0);
     void spotStuff ();
+    void sensePeril ();
 
-    void editSkills (int points);
+    void addSkillPoints (int points) { mSkillPoints += points; }
+    void editSkills ();
 
     void quaffFromVat (shFeature *vat);
+    int useKey (shObject *key, shFeature *door);
 
     shMutantPower getMutantPower (shMutantPower power = kNoMutantPower,
                                   int silent = 0);

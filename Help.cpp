@@ -23,35 +23,57 @@ shInterface::showHelp ()
     int i;
     int row;
 
-    win = newwin (25, 80, 0, 0);
+    int height, width;
+    getmaxyx(stdscr, height, width);
+
+    win = newwin (height, 80, 0, 0);
     if (!win) {
         I->p ("Couldn't create help window.");
         return;
     }
     panel = new_panel (win);
-    mvwaddstr (win, 0, 35, "ZapM Command Help");
+    mvwaddstr (win, 0, 0, "ZapM Command Help");
 
     wattrset (win, ColorMap[kBrightMagenta]);
-
-    mvwaddstr (win, 2, 2, "7 8 9  y k u");
-    mvwaddstr (win, 4, 2, "4   6  h   l");
-    mvwaddstr (win, 6, 2, "1 2 3  b j n");
+    mvwaddstr (win, 2, 2, "7 8 9");
+    mvwaddstr (win, 4, 2, "4   6");
+    mvwaddstr (win, 6, 2, "1 2 3");
 
     wattrset (win, A_NORMAL);
-    mvwaddstr (win, 3, 2, " \\|/    \\|/");
+    mvwaddstr (win, 3, 2, " \\|/");
     mvwaddstr (win, 4, 3,  "-@-");
-    mvwaddstr (win, 4, 10, "-@-");
-    mvwaddstr (win, 5, 2, " /|\\    /|\\");
+    mvwaddstr (win, 5, 2, " /|\\");
 
-    mvwaddstr (win, 2, 16, "Use the numeric keypad for movement.");
-    mvwaddstr (win, 3, 16, "Nethack/vi movement keys (hjkl, yubn) are also supported.");
-    mvwaddstr (win, 4, 16, "Move into a monster to fight it.");
-    mvwaddstr (win, 5, 16, "Use the '5' or 'g' key followed by a direction key to move");  
-    mvwaddstr (win, 6, 16, "in that direction until something interesting is found.");  
+    mvwaddstr (win, 2, 9, "Use the numeric keypad for movement.");
+    mvwaddstr (win, 3, 9, "Move into a monster to fight it.");
+    mvwaddstr (win, 4, 9, "Use the '5' or 'g' key followed by a direction key to move");  
+    mvwaddstr (win, 5, 9, "in that direction until something interesting is found.");  
+    //mvwaddstr (win, 6, 9, "'F'+<dir> will fight even if no monster is seen.");
 
+    wattrset (win, ColorMap[kBrightMagenta]);
+    mvwaddstr (win, 8, 2,  "y k u  Y K U");
+    mvwaddstr (win, 10, 2, "h   l  H   L");
+    mvwaddstr (win, 12, 2, "b j n  B J N");
+    wattrset (win, A_NORMAL);
+    mvwaddstr (win, 9, 2,  " \\|/    \\|/");
+    mvwaddstr (win, 10, 3,  "-@-");
+    mvwaddstr (win, 10, 10, "-@-");
+    mvwaddstr (win, 11, 2, " /|\\    /|\\");
 
+    mvwaddstr (win, 8, 16, "Nethack/vi movement keys are also supported; enable ");
+    mvwaddstr (win, 9, 16, "them via the Options Menu ('O').");
+    mvwaddstr (win, 10, 16, "YUHJKLBN will move in the direction until something ");
+    mvwaddstr (win, 11, 16, "interesting is found. ");
+
+    wattrset (win, ColorMap[kBrightMagenta]);
+    mvwaddch (win, 4, 18, '5');
+    mvwaddch (win, 4, 25, 'g');
+    //mvwaddch (win, 6, 10, 'F');
+    mvwaddch (win, 9, 44, 'O');
+    mvwaddstr (win, 10, 16, "YUHJKLBN");
+    wattrset (win, A_NORMAL);
     
-    row = 8;
+    row = 14;
     for (i = 0; i < KEY_MAX; i++) {
         Command cmd = mKey2Cmd[i];
         int key = i;
@@ -61,20 +83,23 @@ shInterface::showHelp ()
         if (i < 0x1f) {
             mvwaddch (win, row, 3, '^' | ColorMap[kBrightMagenta]);
             key = i | 0x40;
-        } else if (0x80 == i & 0x80) {
+        } else if (0x80 == (i & 0x80)) {
             mvwaddch (win, row, 2, 'M' | ColorMap[kBrightMagenta]);
             mvwaddch (win, row, 3, '-' | ColorMap[kBrightMagenta]);
             key = i & 0x70;
         }
 
         mvwaddch (win, row, 4, key | ColorMap[kBrightMagenta]);
-        mvwaddstr (win, row, 7, mCommandHelp[cmd]);
-
-        if (24 == ++row) {
+        {
+            char buf[80];
+            strncpy (buf, mCommandHelp[cmd], sizeof(buf));
+			mvwaddstr (win, row, 7, buf);
+		}
+        if (height-1 == ++row) {
             mvwaddstr (win, row, 1, "--More--");
             update_panels (); 
             doupdate();
-            I->getChar ();
+            I->getChar (win);
             werase (win);
             row = 0;
         }
@@ -82,7 +107,7 @@ shInterface::showHelp ()
     mvwaddstr (win, row, 1, "--End--");
     update_panels ();
     doupdate();
-    I->getChar ();
+    I->getChar (win);
     hide_panel (panel);
     del_panel (panel);
     delwin (win);

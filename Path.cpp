@@ -89,8 +89,8 @@ shCreature::shortestPath (int ox, int oy,
 //    memset (&data, 0, sizeof (data));
 
 #define getnode(_x, _y) (&data[_y * MAPMAXCOLUMNS + _x])
-#define getnodex(_n) ((((unsigned long) _n - (unsigned long) data) / sizeof (PathNode)) % MAPMAXCOLUMNS)
-#define getnodey(_n) ((((unsigned long) _n - (unsigned long) data) / sizeof (PathNode)) / MAPMAXCOLUMNS)
+#define getnodex(_n) ((((char *) _n - (char *) data) / sizeof (PathNode)) % MAPMAXCOLUMNS)
+#define getnodey(_n) ((((char *) _n - (char *) data) / sizeof (PathNode)) / MAPMAXCOLUMNS)
 
     PathNode *node;
     PathNode *newnode;

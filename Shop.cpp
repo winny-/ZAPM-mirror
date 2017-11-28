@@ -17,7 +17,6 @@ void
 shHero::enterShop ()
 {
     shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
-    char buf[50];
     
     if (shopkeeper) {
         if (shopkeeper->isHostile ()) {
@@ -47,8 +46,7 @@ shHero::enterShop ()
                 I->p ("\"Welcome!\""); break;
             }
         } else {
-            shopkeeper->the (buf, 50);
-            I->p ("%s beeps and bloops enthusiastically.", buf);
+            I->p ("%s beeps and bloops enthusiastically.", THE (shopkeeper));
             Hero.resetStoryFlag ("theft warning");
         }
     } else {
@@ -60,8 +58,7 @@ shHero::enterShop ()
 void
 shHero::leaveShop ()
 {
-    shMonster *shopkeeper = mLevel->getShopKeeper (mLastX, mLastY);
-    char buf[50];
+    shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
     shObjectVector v;
     int i;
 
@@ -78,21 +75,24 @@ shHero::leaveShop ()
         }
         return;
     }
-    shopkeeper->the (buf, 50);
     if (shopkeeper->isHostile ()) {
         if (tryToTranslate (shopkeeper)) {
             I->p ("\"Not so fast!\"");
         } else {
-            I->p ("%s is beeping frantically!", buf);
+            I->p ("%s is beeping frantically!", THE (shopkeeper));
         }
-    } else if (0 == v.count ()) {
+    } else if (0 == v.count () && !shopkeeper->mShopKeeper.mBill) {
         if (tryToTranslate (shopkeeper)) {
             I->p ("\"Come again soon!\"");
         } else {
-            I->p ("%s twitters cheerfully.", buf);
+            I->p ("%s twitters cheerfully.", THE (shopkeeper));
         }
     } else {
-        I->p ("You left with unpaid merchandise!");
+        if (v.count ()) {
+            I->p ("You left with unpaid merchandise!");
+        } else {
+            I->p ("You left without paying your bill!");
+        }
         shopkeeper->newEnemy (this);
     }
     Hero.resetStoryFlag ("theft warning");
@@ -100,10 +100,22 @@ shHero::leaveShop ()
 
 
 void
+shHero::damagedShop (int x, int y)
+{
+    shMonster *shopkeeper = mLevel->getShopKeeper (x, y);
+
+    if (shopkeeper && !shopkeeper->isHostile ()) {
+        if (tryToTranslate (shopkeeper)) {
+            I->p ("\"Hey! You can't do that in here!\"");
+        }
+        shopkeeper->newEnemy (this);
+    }
+}
+
+
+void
 shHero::usedUpItem (shObject *obj, int cnt, const char *action)
 {
-    char buf[50];
-    char buf2[50];
     shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
 
     if (shopkeeper && 
@@ -116,15 +128,14 @@ shHero::usedUpItem (shObject *obj, int cnt, const char *action)
         }
         int price = obj->mIlk->mCost * cnt;
 
-        shopkeeper->the (buf, 50);
         if (tryToTranslate (shopkeeper)) {
             I->p ("\"You %s it, you bought it!\"", action);
-            obj->getShortDescription (buf2, 50);
             I->p ("You owe %s $%d for %s %s.", 
-                  buf, price, cnt > 1 ? "those" : "that", buf2);
+                  THE (shopkeeper), price, cnt > 1 ? "those" : "that", 
+                  obj->getShortDescription ());
         } else {
             I->p ("%s testily beeps something about %d buckazoids.", 
-                  buf, price);
+                  THE (shopkeeper), price);
         }
         shopkeeper->mShopKeeper.mBill += price;
     }
@@ -134,7 +145,6 @@ shHero::usedUpItem (shObject *obj, int cnt, const char *action)
 void
 shHero::pickedUpItem (shObject *obj)
 {
-    char buf[50];
     shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
 
     if (shopkeeper && 
@@ -152,31 +162,29 @@ shHero::pickedUpItem (shObject *obj)
 #endif    
             switch (RNG (5)) {
             case 0:
-                obj->these (buf, 50);
-                I->p ("\"%s %s yours for only %d buckazoids!\"", buf, 
+                I->p ("\"%s %s yours for only %d buckazoids!\"", THESE (obj),
                       obj->mCount > 1 ? "are" : "is", price); 
                 break;
             case 1:
-                obj->these (buf, 50);
-                I->p ("\"Take %s home for %d buckazoids!\"", buf, price); 
+                I->p ("\"Take %s home for %d buckazoids!\"", 
+                      THESE (obj), price); 
                 break;
             case 2:
-                obj->these (buf, 50);
-                I->p ("\"Only $%d for %s!\"", price, buf); 
+                I->p ("\"Only $%d for %s!\"", price, THESE (obj)); 
                 break;
             case 3:
-                obj->an (buf, 50);
-                I->p ("\"%s, on sale for %d buckazoids!\"", buf, price); 
+                I->p ("\"%s, on sale for %d buckazoids!\"", 
+                      obj->anQuick (), price); 
                 break;
             case 4:
-                obj->an (buf, 50);
-                I->p ("\"%s for $%d!  Such a deal!\"", buf, price); 
+                I->p ("\"%s for $%d!  Such a deal!\"", 
+                      obj->anQuick (), price); 
                 break;
             }
         } else {
-            char shbuf[50];
-            shopkeeper->the (shbuf, 50);
-            I->p ("%s beeps something about %d buckazoids.", shbuf, price);
+            I->p ("%s beeps something about %d %s.", 
+                  THE (shopkeeper), price, 
+                  price > 1 ? "buckazoids" : "buckazoid");
         }
     }
 }
@@ -185,8 +193,6 @@ shHero::pickedUpItem (shObject *obj)
 void
 shHero::maybeSellItem (shObject *obj)
 {
-    char buf[50];
-    char buf2[50];
     shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
 
     if (shopkeeper && 
@@ -195,8 +201,10 @@ shHero::maybeSellItem (shObject *obj)
         !obj->isA (kMoney) &&
         shopkeeper->canSee (this)) 
     {
-        int price = obj->mIlk->mCost * obj->mCount / 2;
+        int price = obj->mIlk->mCost * obj->mCount / 10;
         int quote = price;
+        const char *the_sk = THE (shopkeeper);
+        const char *an_obj = obj->anQuick ();
 
         Hero.resetStoryFlag ("theft warning");
 
@@ -204,30 +212,27 @@ shHero::maybeSellItem (shObject *obj)
             quote = shopkeeper->countMoney ();
         }
 
-        shopkeeper->the (buf, 50);
-        obj->an (buf2, 50);
-
         if (0 == quote) {
             if (tryToTranslate (shopkeeper)) {
-                I->p ("%s is unable to buy %s from you.", buf, buf2);
+                I->p ("%s is unable to buy %s from you.", the_sk, an_obj);
             } else {
-                I->p ("%s whirs disappointedly.", buf, buf2);
+                I->p ("%s whirs disappointedly.", the_sk, an_obj);
             }
             return;
         } else if (quote < price) {
             if (tryToTranslate (shopkeeper)) {
-                I->p ("\"I can only offer you $%d for %s.\"", quote, buf2);
+                I->p ("\"I can only offer you $%d for %s.\"", quote, an_obj);
             } else {
                 I->p ("%s chirps and beeps something about %d buckazoids.",
-                      buf, quote);
+                      the_sk, quote);
             }
         } else {
             if (tryToTranslate (shopkeeper)) {
-                I->p ("%s offers to buy %s for %d buckazoids.", buf, buf2, 
-                      quote);
+                I->p ("%s offers to buy %s for %d buckazoids.",
+                      the_sk, an_obj, quote);
             } else {
                 I->p ("%s chirps and beeps something about %d buckazoids.",
-                      buf, quote);
+                      the_sk, quote);
             }
         }
         if (I->yn ("Sell %s?", obj->mCount > 1 ? "them" : "it")) {
@@ -243,13 +248,22 @@ shHero::maybeSellItem (shObject *obj)
 void
 shHero::payShopkeeper ()
 {
-    char buf[80];
     shMonster *shopkeeper = mLevel->getShopKeeper (mX, mY);
     shMonster *guard = mLevel->getGuard (mX, mY);
+    shMonster *doc = mLevel->getDoctor (mX, mY);
     int i;
     shObject *obj;
     shObjectVector v;
     int price;
+
+    if (doc) {
+        if (!isAdjacent (doc->mX, doc->mY)) {
+            I->p ("You need to move next to %s first.", THE (doc));
+        } else {
+            payDoctor (doc);
+        }
+        return;
+    }
 
     if (!shopkeeper && !guard) {
         I->p ("There's nobody around to pay.");
@@ -257,17 +271,20 @@ shHero::payShopkeeper ()
     }
 
     if (guard) {
-        guard->the (buf, 50);
         if (guard->isHostile ()) {
-            I->p ("%s intends to collect payment from your dead body!", buf);
+            I->p ("%s intends to collect payment from your dead body!", 
+                  THE (guard));
             return;
         }
         price = guard->mGuard.mToll;
         if (0 == price) {
             I->p ("You've already paid the toll.");
             return;
+        } else if (2 == guard->mGuard.mChallengeIssued) {
+            I->p ("As an on-duty janitor, you are exempt from the toll.");
+            return;
         } else if (price > 0) {
-            if (I->yn ("Pay %s %d buckazoids?", buf, price)) {
+            if (I->yn ("Pay %s %d buckazoids?", THE (guard), price)) {
                 if (price > countMoney ()) {
                     I->p ("But you don't have that much money.");
                     return;
@@ -278,7 +295,7 @@ shHero::payShopkeeper ()
                     if (tryToTranslate (guard)) {
                         I->p ("\"You may pass.");
                     } else {
-                        I->p ("%s beeps calmly.", buf);
+                        I->p ("%s beeps calmly.", THE (guard));
                     }
                 }
             }
@@ -291,8 +308,8 @@ shHero::payShopkeeper ()
            once the shopkeeper is angry, so the quick and dirty solution is
            not to allow pacification
          */
-        shopkeeper->the (buf, 50);
-        I->p ("%s intends to collect payment from your dead body!", buf);
+        I->p ("%s intends to collect payment from your dead body!", 
+              THE (shopkeeper));
         return;
     }
     
@@ -319,14 +336,12 @@ shHero::payShopkeeper ()
                  shMenu::kMultiPick | shMenu::kCategorizeObjects);
     for (i = 0; i < v.count (); i++) {
         obj = v.get (i);
-        obj->inv (buf, 80);
-        menu.addItem (obj->mLetter, buf, obj, obj->mCount);
+        menu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
     }
-    while (menu.getResult ((void **) &obj)) {
+    while (menu.getResult ((const void **) &obj)) {
         price = obj->mCount * obj->mIlk->mCost;
         if (price > countMoney ()) {
-            obj->the (buf, 80);
-            I->p ("You can't afford to pay for %s.", buf);
+            I->p ("You can't afford to pay for %s.", THE (obj));
         } else {
             loseMoney (price);
             shopkeeper->gainMoney (price);
@@ -336,12 +351,10 @@ shHero::payShopkeeper ()
                        never if it's buggy or optimized. */
                     obj->setIlkKnown (); 
                 }
-                obj->the (buf, 80);
                 I->p ("\"That'll be %d buckazoids for %s, thank you.\"", 
-                      price, buf);
+                      price, obj->theQuick ());
             } else {
-                obj->the (buf, 80);
-                I->p ("You buy %s for %d buckazoids.", buf, price);
+                I->p ("You buy %s for %d buckazoids.", THE (obj), price);
             }
             obj->resetUnpaid ();
         }
@@ -361,12 +374,9 @@ shMonster::doShopKeep ()
 {    
     I->debug ("  shopkeeper strategy");
     int elapsed;
-    char buf[50];
     int res = -1;
     int retry = 3;
     
-    the (buf, 50);
-
     while (-1 == res) {
         if (!retry--) {
             return 200;
@@ -401,7 +411,8 @@ shMonster::doShopKeep ()
             {
                 if (Level->isInDoorWay (Hero.mX, Hero.mY)) {
                     shObjectVector v;
-                    if (selectObjectsByFunction (&v, Hero.mInventory, 
+                    if (mShopKeeper.mBill ||
+                        selectObjectsByFunction (&v, Hero.mInventory, 
                                                  &shObject::isUnpaid)) 
                     {
                         /* Hero about to leave w/ unpaid merchandise */
@@ -410,7 +421,7 @@ shMonster::doShopKeep ()
                                 I->p ("\"Please don't "
                                       "leave without paying!\"");
                             } else {
-                                I->p ("%s chitters urgently.", buf);
+                                I->p ("%s chitters urgently.", the ());
                             }
                             Hero.setStoryFlag ("theft warning", 1);
                         } 
@@ -447,7 +458,7 @@ shMonster::doShopKeep ()
                     }
                     return RNG (300, 1000); /* nowhere to go, let's wait... */
                 } else if (0 == RNG (50)) {
-                    char *quips[3] = {
+                    const char *quips[3] = {
                         "I'd give them away, but my wifebot won't let me!",
                         "All merchandise sold as-is.",
                         "Shoplifters will be vaporized!",
@@ -482,9 +493,7 @@ shMonster::doAngryShopKeep ()
             I->p ("\"%s\"", 
                   RNG (2) ? "Stop, thief!" : "You shoplifting scum!");
         } else {
-            char buf[50];
-            the (buf, 50);
-            I->p ("%s beeps angrilly at you.", buf);
+            I->p ("%s beeps angrily at you.", the ());
         }
     }
     return doWander ();

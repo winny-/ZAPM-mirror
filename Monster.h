@@ -10,22 +10,19 @@ class shMonsterType;
 
 class shMonster : public shCreature
 {
-    friend class shMonsterIlk;
+    friend struct shMonsterIlk;
 public:
     enum Strategy {
         kWander,      /* wander around looking for a fight */
-        kDefend,      /* stay put, if Hero approaches, fight but don't pursue */
         kLurk,        /* stay put, if Hero approaches, fight and pursue */
-        kPassive,     /* stay put, never do anything */
-        kSessile,     /* stay put, attack any adjacent creature */
-        kHide,        /* same as sessile, but pursue if hero finds us */
+        kSitStill,    /* stay put, attack any adjacent creature */
+        kHide,        /* same as sitstill, but pursue if hero finds us */
         kHatch,       /* alien egg strategy */
-        kChase,       /* pursue Hero */
         kPet,         /* pet strategy */
-        kPeaceful,    /* peaceful - wander slowly, maybe get equipment */
         kShopKeep,
         kAngryShopKeep,
         kGuard,
+        kDoctor,
     };
 
     enum Tactic {
@@ -68,6 +65,12 @@ public:
         struct {
             int mHatchChance;
         } mAlienEgg;
+        struct {
+            int mHomeX;
+            int mHomeY;
+            int mRoomID;
+            int mPermute[7];
+        } mDoctor;
     };
     Strategy mStrategy;
     Tactic mTactic;
@@ -86,10 +89,10 @@ public:
     void loadState (int fd);
 
     void takeTurn ();
-    char *the (char *buff, int len);
-    char *an (char *buff, int len);
-    char *your (char *buff, int len);
-    char *getDescription (char *buff, int len);
+    const char *the ();
+    const char *an ();
+    const char *your ();
+    const char *getDescription ();
 
     int numHands ();
     int getMutantLevel ();
@@ -98,6 +101,7 @@ public:
 
     void makeAngry ();
     void newEnemy (shCreature *c);
+    void newDest (int x, int y);
 
     int checkThreats ();
     void findPetGoal ();
@@ -124,7 +128,9 @@ public:
         kFreeMoney =  0x1000,
         kFreeWeapon = 0x2000,
         kFreeArmor =  0x4000,
+        kFreeEnergy = 0x8000,
         kFreeItem =   0xf000,
+        kHidingSpot = 0x10000,
     };
 
     int findSquares (int flags, shCoord *coords, int *info);
@@ -133,7 +139,7 @@ public:
     void doRangedAttack (shAttack *attack, shDirection dir);
     int useMutantPower ();
 
-    int doSessile ();
+    int doSitStill ();
     int doHide ();
     int doLurk ();
     int doHatch ();
@@ -142,17 +148,20 @@ public:
     int doShopKeep ();
     int doAngryShopKeep ();
     int doGuard ();
+    int doDoctor ();
+
     int doRetaliate ();
-    
+
     int doFight ();
     int doMoveTo ();
 
+    int mimicSomething ();
     int meleeAttack (shObject *weapon, shAttack *attack, int x, int y);
 
     int isHostile () { return kHostile == mDisposition; }
     int isPet () { return mTame; }
     void makePet ();
-    int die (shCauseOfDeath how, char *killer = NULL);
+    int die (shCauseOfDeath how, const char *killer = NULL);
 
 };
 
@@ -162,7 +171,7 @@ struct shMonsterIlk
     friend class shMonster;
  public:
     //constructor:
-    shMonsterIlk (char *name,
+    shMonsterIlk (const char *name,
                   shCreatureType ty,
                   struct shMonsterIlk *parent,
                   shThingSize size,
@@ -170,6 +179,7 @@ struct shMonsterIlk
                   int baselevel,
                   int str, int con, int agi, int dex, int in, int wis, int cha,
                   int speed,
+                  int gender,
                   int numhands,
                   int ac,
                   int numappearingdice,
@@ -193,11 +203,12 @@ struct shMonsterIlk
 
     void addMutantPower (shMutantPower power);
 
-    void addEquipment (char *description);
+    void addEquipment (const char *description);
     void addIntrinsic (shIntrinsics intrinsic);
     void addResistance (shEnergyType energy, int amount);
-    void addBlurb (char *blurb);
-
+    void addBlurb (const char *blurb);
+    void addFeat (shFeat feat);
+    
     void spoilers ();
     //void addSkill ();
 
@@ -205,9 +216,9 @@ struct shMonsterIlk
     //representation:
     int mId;
     shCreatureType mType;
-    class shMonsterIlk *mParent;  //more general type (e.g. warhorse/horse)
+    struct shMonsterIlk *mParent;  //more general type (e.g. warhorse/horse)
     
-    char *mName;
+    const char *mName;
 
     shThingSize mSize;        // size category
     int mHitDice;
@@ -224,16 +235,18 @@ struct shMonsterIlk
 
     int mSpeed;   
 
+    int mGender;
     int mNumHands;    // number of hands that can wield weapons
 
     int mNaturalArmorBonus;  
     int mInateIntrinsics;
-    int mInateResistances[kMaxEnergyType];
+    char mInateResistances[kMaxEnergyType];
 
+    int mFeats;
     char mMutantPowers[kMaxMutantPower];
     shVector <shAttack *> mAttacks;
     shVector <shAttack *> mRangedAttacks;
-    shVector <char *> mStartingEquipment;
+    shVector <const char *> mStartingEquipment;
 
     char mNumAppearingDice;
     char mNumAppearingDieSides;
@@ -244,7 +257,7 @@ struct shMonsterIlk
     shMonster::Strategy mDefaultStrategy;
     shMonster::Disposition mDefaultDisposition;
     int mPeacefulChance;
-    char *mBlurb;
+    const char *mBlurb;
 };
 
 
@@ -252,7 +265,7 @@ void initializeMonsters ();
 
 
 shMonsterIlk *pickAMonsterIlk (int level);
-shMonsterIlk *findAMonsterIlk (char *name);
+shMonsterIlk *findAMonsterIlk (const char *name);
 shMonster * generateMonster (int level);
 
 struct shMonsterReadyEvent : public shEvent

@@ -21,6 +21,9 @@ shHero::reorganizeInventory ()
 
     for (i = 0; i < mInventory->count (); i++) {
         obj = mInventory->get (i);
+        if (hasBugSensing ()) {
+            obj->setBugginessKnown ();
+        }
         if (!isBlind ()) {
             obj->setAppearanceKnown ();
         }
@@ -30,8 +33,7 @@ shHero::reorganizeInventory ()
                 mInventory->remove (obj);               
                 obj2->merge (obj);
 #ifdef MERGEMESSAGE
-                obj2->inv (buf, 60);
-                I->p ("Merging: %c - %s", obj2->mLetter, buf);
+                I->p ("Merging: %c - %s", obj2->mLetter, obj2->inv ());
 #endif
                 --i;
             }
@@ -46,9 +48,12 @@ shHero::addObjectToInventory (shObject *obj, int quiet /* = 0 */)
 {
     int i;
     char spots[52];
-    char buf[50];
 
-    obj->an (buf, 50);
+    if (hasBugSensing ()) {
+        obj->setBugginessKnown ();
+    }
+
+    const char *what = AN (obj);
         
     for (i = 0; i < 52; spots[i++] = 0);
     for (i = 0; i < mInventory->count (); i++) {
@@ -61,7 +66,7 @@ shHero::addObjectToInventory (shObject *obj, int quiet /* = 0 */)
             mWeight += obj->getMass ();
             iobj->merge (obj);
             if (0 == quiet) {
-                I->p ("%c - %s", iobj->mLetter, buf);
+                I->p ("%c - %s", iobj->mLetter, what);
             }
             computeIntrinsics ();
             return 1;
@@ -85,7 +90,7 @@ shHero::addObjectToInventory (shObject *obj, int quiet /* = 0 */)
             obj->mLocation = shObject::kInventory;
             obj->mOwner = this;
             if (0 == quiet) {
-                I->p ("%c - %s", obj->mLetter, buf);
+                I->p ("%c - %s", obj->mLetter, what);
             }
             mInventory->sort (&compareObjects);
             computeIntrinsics ();
@@ -93,7 +98,7 @@ shHero::addObjectToInventory (shObject *obj, int quiet /* = 0 */)
         }
     }
 
-    I->p ("You don't have any room in your pack for %s", buf);
+    I->p ("You don't have any room in your pack for %s.", what);
     return 0;
 }
 
@@ -172,16 +177,29 @@ unselectObjectsByFunction (shObjectVector *dest, shObjectVector *src,
 }
 
 
+int
+compare_letters (const void *a, const void *b)
+{
+    if (*(char*) a < *(char*)b)
+        return -1;
+    else if (*(char*)a > *(char*)b)
+        return 1;
+    else 
+        return 0;
+}
+
 
 // EFFECTS: prompts the user to select an item
 //          if type is kMaxObjectType, no type restriction
 
 shObject *
-shHero::quickPickItem (shObjectVector *v, char *action, int flags,
+shHero::quickPickItem (shObjectVector *v, const char *action, int flags,
                        int *count /* = NULL */ )
 {
-    int i;
-    char letterlist[50];
+    int i, j;
+    char letterlist[256];
+    char fastlist[256];
+    char first;
     char pick;
     int cnt;
 
@@ -193,17 +211,43 @@ shHero::quickPickItem (shObjectVector *v, char *action, int flags,
         letterlist[i] = v->get (i) -> mLetter;
     }
     letterlist[i] = 0;
+    qsort (letterlist, i, sizeof(char), compare_letters);
+    first = 0;
+    cnt = 0;
+    i = 0;
+    j = -1;
+
+    while (i < v->count ()) {
+        if (letterlist[i] == first + cnt) { /* series */
+            ++cnt;
+            if (cnt <= 3) {
+                fastlist[++j] = letterlist[i];
+            } else if (4 == cnt) {
+                fastlist[j-1] = '-';
+                fastlist[j] = letterlist[i];
+            } else {
+                fastlist[j] = letterlist[i];
+            }
+            ++i;
+        } else {
+            first = fastlist[++j] = letterlist[i++];
+            cnt = 1;
+        }
+    }
+    fastlist[++j] = 0;
+        
+
  tryagain:
     I->p ("What do you want to %s? [%s%s%s]", action, 
           flags & shMenu::kNothingAllowed ? "- " : "",
-          letterlist,
+          fastlist,
           flags & shMenu::kAnythingAllowed
                  ? 0 == v->count () ? "*" : " or ?*" 
                  : 0 == v->count () ? "" : " or ?"); 
     cnt = 0;
 
     while (1) {
-        pick = I->getChar ();
+        pick = I->getChar (I->logWin());
     
         if ('*' == pick) {
             if (flags & shMenu::kAnythingAllowed) {
@@ -215,11 +259,13 @@ shHero::quickPickItem (shObjectVector *v, char *action, int flags,
                 shObject *obj;
                 for (i = 0; i < mInventory->count (); i++) {
                     obj = mInventory->get (i);
-                    char buf[80];
-                    obj->inv (buf, 80);
-                    menu.addItem (obj->mLetter, buf, obj, obj->mCount);
+                    menu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
                 }
-                menu.getResult ((void **) &obj, count);
+                menu.getResult ((const void **) &obj, count);
+                if (!obj) {
+                    I->pageLog ();
+                    I->nevermind ();
+                }
                 return obj;
             }
         }
@@ -233,11 +279,13 @@ shHero::quickPickItem (shObjectVector *v, char *action, int flags,
                 shObject *obj;
                 for (i = 0; i < v->count (); i++) {
                     obj = v->get (i);
-                    char buf[80];
-                    obj->inv (buf, 80);
-                    menu.addItem (obj->mLetter, buf, obj, obj->mCount);
+                    menu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
                 }
-                menu.getResult ((void **) &obj, count);
+                menu.getResult ((const void **) &obj, count);
+                if (!obj) {
+                    I->pageLog ();
+                    I->nevermind ();
+                }
                 return obj;
             }
         }

@@ -34,6 +34,23 @@ consumeChance (char *buf, int *result)
 
 
 static char *
+consumeArticle (char *buf)
+{
+    while (isspace (*buf)) ++buf;
+
+    if (0 == strncmp ("the ", buf, 4)) {
+        buf += 4;
+    } else if (0 == strncmp ("a ", buf, 2)) {
+        buf += 2;
+    } else if (0 == strncmp ("an ", buf, 3)) {
+        buf += 3;
+    }
+    while (isspace (*buf)) ++buf;
+    return buf;
+}
+
+
+static char *
 consumeCount (char *buf, int *result)
 {
     int n = 0;
@@ -59,7 +76,9 @@ consumeCount (char *buf, int *result)
             return NULL;
         }
         *result = n;
-    } 
+    } else {
+        buf = consumeArticle (buf);
+    }
     while (isspace (*buf)) ++buf;
     return buf;
 }
@@ -110,6 +129,21 @@ consumeEnhancement (char *buf, int *result)
     } else {
         return buf;
     }
+}
+
+
+
+static char *
+consumeCracked (char *buf, int *result)
+{
+    *result = 0;
+    while (isspace (*buf)) ++buf;
+    if (0 == strncmp ("cracked ", buf, 7)) {
+        *result = 1;
+        buf += 7;
+    } 
+    while (isspace (*buf)) ++buf;
+    return buf;
 }
 
 
@@ -207,17 +241,23 @@ createObject (const char *desc, int flags)
     int count = -22;
     int bugginess = -22;
     int enhancement = -22;
+    int cracked = -22;
     int charges = -22;
     char ilkdesc[50];
     shObject *obj;
     char buffer[256];
     char *str;
     int chance;
-   
+    int pass;
+
     ilkdesc[0] = 0;
 
     /* make a copy of the string */
+
     strncpy (buffer, desc, 255); buffer[255] = 0;
+
+    for (str = buffer; *str; str++)
+        *str = tolower (*str);
     str = buffer;
 
     I->debug ("parsing %s", str);
@@ -236,25 +276,41 @@ createObject (const char *desc, int flags)
     str = consumeEnhancement (str, &enhancement);
     I->debug ("Enhancement %d, %s", enhancement, str);
     if (NULL == str) return NULL;
+    str = consumeCracked (str, &cracked);
+    I->debug ("Cracked %d, %s", cracked, str);
+    if (NULL == str) return NULL;
+  
     str = makeSingular (str, ilkdesc, 50);
     I->debug ("ilk %s, desc", ilkdesc, str);
 
-    if (0 == strcmp (ilkdesc, "buckazoid")) {
-        return createMoney (count);
+    for (pass = 0; pass < 2; pass++) {
+        if (0 == strcmp (ilkdesc, "buckazoid")) {
+            return createMoney (count);
+        }
+        if (0 == strcmp (ilkdesc, "energy cell")) {
+            return createEnergyCell (count);
+        }
+        obj = createWeapon (ilkdesc, count, bugginess, enhancement, charges);
+        if (obj) return obj;
+        obj = createRayGun (ilkdesc, bugginess, charges);
+        if (obj) return obj;
+        obj = createArmor (ilkdesc, count, bugginess, enhancement, charges);
+        if (obj) return obj;
+        obj = createTool (ilkdesc, count, bugginess, enhancement, charges);
+        if (obj) return obj;
+        obj = createCanister (ilkdesc, count, bugginess, enhancement, charges);
+        if (obj) return obj;
+        obj = createFloppyDisk (ilkdesc, count, bugginess, enhancement,
+                                charges);
+        if (obj) {
+            if (cracked) 
+                obj->setCracked ();
+            return obj;
+        }
+        obj = createImplant (ilkdesc, count, bugginess, enhancement, charges);
+        if (obj) return obj;
+        
     }
-    obj = createWeapon (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
-    obj = createRayGun (ilkdesc, bugginess, charges);
-    if (obj) return obj;
-    obj = createArmor (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
-    obj = createTool (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
-    obj = createCanister (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
-    obj = createFloppyDisk (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
-    obj = createImplant (ilkdesc, count, bugginess, enhancement, charges);
-    if (obj) return obj;
+
     return NULL;
 }

@@ -10,13 +10,15 @@ enum shEnergyType {
     kConcussive,
 
     kBlinding,
-    kBrainDrain,     /* neuralizer, brain bug */
+//    kBrainDraining,  /* neuralizer, brain bug */
+    kBrainExtracting,/* mi-go */
     kBugging,
     kBurning,
     kChoking,
     kConfusing,      
     kCorrosive,      /* acid */
     kCreditDraining, /* creeping credits :-) */
+    kDisarming,
     kDisintegrating, /* antimatter */
     kElectrical,
     kFaceHugging,
@@ -31,13 +33,12 @@ enum shEnergyType {
     kRadiological,
     kRestoring,
     kPsychic,
-    kSeizing,        /* lawyer seizing pirated software */
     kSickening,      /* viruses */
     kStunning,
-    kSuing,          /* lawyer suing for buckazoids */
     kTimeWarping,
     kTransporting,
     kViolating,
+    kWebbing,
     kMaxEnergyType
 };
 
@@ -73,14 +74,15 @@ struct shAttack
         kBreatheTime,
         kBreatheTraffic,
         kBreatheViruses,
-        kCease,
         kClaw,
         kClub,
         kChoke,
         kCook,
         kCrush,
+        kCut,
         kDisintegrationRay,
-        kExtractBrain, /* brain bug */
+        kExplode,
+        kExtractBrain, /* mi-go */
         kFaceHug,      /* facehugger */
         kFlash,
         kFreezeRay,
@@ -89,8 +91,10 @@ struct shAttack
         kHeadButt,
         kHealingRay,
         kHeatRay,
+        kImpact,       /* football, improvised thrown weapon */
         kKick,
         kLaser,
+        kLegalThreat,
         kLightningBolt,
         kMentalBlast,
         kPoisonRay,
@@ -99,7 +103,6 @@ struct shAttack
         kQuill,
         kRail,
         kRestorationRay,
-        kSeize,        /* lawyer seizing pirated software */
         kShot,         /* shotgun pellets */
         kSlash,
         kSlime,
@@ -107,11 +110,11 @@ struct shAttack
         kStab,
         kStasisRay,
         kSting,
-        kSue,          /* lawyer suing for damages */
         kSword,
         kTailSlap,
         kTouch,
         kTransporterRay,
+        kWeb,
         kZap,
         kMaxAttackType
     };
@@ -186,9 +189,12 @@ struct shAttack
 
 extern shAttack ImprovisedObjectAttack;
 extern shAttack ImprovisedMissileAttack;
+extern shAttack KickedFootballAttack;
 extern shAttack GroundCollisionAttack;
 extern shAttack PitTrapDamage;
 extern shAttack AcidPitTrapDamage;
 extern shAttack OpticBlastAttack;
+extern shAttack WebAttak;
 extern shAttack AcidBloodAttack;
+extern shAttack ExplodingMonsterAttack;
 #endif

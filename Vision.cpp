@@ -49,32 +49,54 @@ shMapLevel::computeVisibility ()
 
     mVisibility[Hero.mX][Hero.mY] = 1;
 
+    if (Hero.mZ < 0) {
+        /* in a pit */
+        if (isObstacle (Hero.mX, Hero.mY)) 
+            return; /* sealed in */
+        if (Hero. isUnderwater ())
+            return;
+        for (x = Hero.mX-1; x <= Hero.mX+1; x++) {
+            for (y = Hero.mY-1; y < Hero.mY+1; y++) {
+                mVisibility[x][y] = 1;
+            }
+        }
+        return;
+    }
+
     for (x = Hero.mX;
-         mVisibility[x][Hero.mY] = 1, !isOcclusive (x, Hero.mY); 
+         mVisibility[x][Hero.mY] = 1, x < MAPMAXCOLUMNS-1
+                                      && !isOcclusive (x, Hero.mY); 
          x++);
     for (x = Hero.mX; 
-         mVisibility[x][Hero.mY] = 1, !isOcclusive (x, Hero.mY);
+         mVisibility[x][Hero.mY] = 1, x && !isOcclusive (x, Hero.mY);
          x--);  
     for (y = Hero.mY; 
-         mVisibility[Hero.mX][y] = 1, !isOcclusive (Hero.mX, y); 
+         mVisibility[Hero.mX][y] = 1, y < MAPMAXROWS-1 
+                                      && !isOcclusive (Hero.mX, y); 
          y++);
     for (y = Hero.mY;
-         mVisibility[Hero.mX][y] = 1, !isOcclusive (Hero.mX, y); 
+         mVisibility[Hero.mX][y] = 1, y && !isOcclusive (Hero.mX, y); 
          y--);
 
     /* now each quadrant */
 
-    for (slope = 1; slope < 32; slope++) {
-        for (u = 1, v = slope, min = 0, max = 31; 
-             u < 50 && min <= max;
+#define BEAMS 32
+#define MAXD 100
+
+    for (slope = 1; slope < BEAMS; slope++) {
+        for (u = 1, v = slope, min = 0, max = BEAMS-1; 
+             u < MAXD && min <= max;
              u++, v += slope)
         {
-            y = v / 32;
+            y = v / BEAMS;
             x = u - y;
             x += Hero.mX;
             y += Hero.mY;
 
-            corner = 32 - v % 32;
+            if (x >= MAPMAXCOLUMNS || y >= MAPMAXROWS)
+                break;
+
+            corner = BEAMS - v % BEAMS;
 
             if (min < corner) {
                 mVisibility[x][y] = 1;
@@ -82,7 +104,7 @@ shMapLevel::computeVisibility ()
                     min = corner;
                 }
             }
-            if (max > corner) {
+            if (max > corner && y < MAPMAXROWS-1) {
                 mVisibility[x-1][y+1] = 1;
                 if (isOcclusive (x - 1, y + 1)) {
                     max = corner;
@@ -90,17 +112,20 @@ shMapLevel::computeVisibility ()
             }
         }
     }
-    for (slope = 1; slope < 32; slope++) {
-        for (u = 1, v = slope, min = 0, max = 31; 
-             u < 50 && min <= max;
+    for (slope = 1; slope < BEAMS; slope++) {
+        for (u = 1, v = slope, min = 0, max = BEAMS-1; 
+             u < MAXD && min <= max;
              u++, v += slope)
         {
-            y = v / 32;
+            y = v / BEAMS;
             x = u - y;
             x = Hero.mX - x;
             y += Hero.mY;
 
-            corner = 32 - v % 32;
+            if (x < 0 || y >= MAPMAXROWS)
+                break;
+
+            corner = BEAMS - v % BEAMS;
 
             if (min < corner) {
                 mVisibility[x][y] = 1;
@@ -108,7 +133,7 @@ shMapLevel::computeVisibility ()
                     min = corner;
                 }
             }
-            if (max > corner) {
+            if (max > corner && y < MAPMAXROWS-1) {
                 mVisibility[x+1][y+1] = 1;
                 if (isOcclusive (x + 1, y + 1)) {
                     max = corner;
@@ -117,17 +142,20 @@ shMapLevel::computeVisibility ()
         }
     }
 
-    for (slope = 1; slope < 32; slope++) {
-        for (u = 1, v = slope, min = 0, max = 31; 
-             u < 50 && min <= max;
+    for (slope = 1; slope < BEAMS; slope++) {
+        for (u = 1, v = slope, min = 0, max = BEAMS-1; 
+             u < MAXD && min <= max;
              u++, v += slope)
         {
-            y = v / 32;
+            y = v / BEAMS;
             x = u - y;
             x = Hero.mX - x;
             y = Hero.mY - y;
 
-            corner = 32 - v % 32;
+            if (x < 0 || y < 0)
+                break;
+
+            corner = BEAMS - v % BEAMS;
 
             if (min < corner) {
                 mVisibility[x][y] = 1;
@@ -135,7 +163,7 @@ shMapLevel::computeVisibility ()
                     min = corner;
                 }
             }
-            if (max > corner) {
+            if (max > corner && y > 0) {
                 mVisibility[x+1][y-1] = 1;
                 if (isOcclusive (x + 1, y - 1)) {
                     max = corner;
@@ -144,17 +172,20 @@ shMapLevel::computeVisibility ()
         }
     }
 
-    for (slope = 1; slope < 32; slope++) {
-        for (u = 1, v = slope, min = 0, max = 31; 
-             u < 50 && min <= max;
+    for (slope = 1; slope < BEAMS; slope++) {
+        for (u = 1, v = slope, min = 0, max = BEAMS-1; 
+             u < MAXD && min <= max;
              u++, v += slope)
         {
-            y = v / 32;
+            y = v / BEAMS;
             x = u - y;
             x = x + Hero.mX;
             y = Hero.mY - y;
 
-            corner = 32 - v % 32;
+            if (x >= MAPMAXCOLUMNS || y < 0)
+                break;
+
+            corner = BEAMS - v % BEAMS;
 
             if (min < corner) {
                 mVisibility[x][y] = 1;
@@ -162,7 +193,7 @@ shMapLevel::computeVisibility ()
                     min = corner;
                 }
             }
-            if (max > corner) {
+            if (max > corner && y > 0) {
                 mVisibility[x-1][y-1] = 1;
                 if (isOcclusive (x - 1, y - 1)) {
                     max = corner;
@@ -170,6 +201,72 @@ shMapLevel::computeVisibility ()
             }
         }
     }
+
+    /* corner peeking */
+    if (Hero.mY > 1) {
+        for (x = Hero.mX, y = Hero.mY-1; 
+             x < MAPMAXCOLUMNS-1 && !isOcclusive (x, y) ;
+             x++)
+        {
+            mVisibility[x][y-1] = mVisibility[x+1][y-1] = 
+                mVisibility[x+1][y] = 1;
+        }
+        for (x = Hero.mX, y = Hero.mY-1; x > 0 && !isOcclusive (x, y);
+             x--)
+        {
+            mVisibility[x][y-1] = mVisibility[x-1][y-1] = 
+                mVisibility[x-1][y] = 1;
+        }
+    }
+    if (Hero.mY < MAPMAXROWS - 2) {
+        for (x = Hero.mX, y = Hero.mY+1; 
+             x < MAPMAXCOLUMNS-1 && !isOcclusive (x, y) ;
+             x++)
+        {
+            mVisibility[x][y+1] = mVisibility[x+1][y+1] = 
+                mVisibility[x+1][y] = 1;
+        }
+        for (x = Hero.mX, y = Hero.mY+1; x > 0 && !isOcclusive (x, y);
+             x--)
+        {
+            mVisibility[x][y+1] = mVisibility[x-1][y+1] = 
+                mVisibility[x-1][y] = 1;
+        }
+    }
+    if (Hero.mX > 1) {
+        for (x = Hero.mX-1, y = Hero.mY; 
+             y < MAPMAXROWS-1 && !isOcclusive (x, y);
+             y++)
+        {
+            mVisibility[x-1][y] = mVisibility[x-1][y+1] = 
+                mVisibility[x][y+1] = 1;
+        }
+        for (x = Hero.mX-1, y = Hero.mY; y > 0 && !isOcclusive (x, y);
+             y--)
+        {
+            mVisibility[x-1][y] = mVisibility[x-1][y-1] = 
+                mVisibility[x][y-1] = 1;
+        }
+    }
+    if (Hero.mX < MAPMAXCOLUMNS - 2) {
+        for (x = Hero.mX+1, y = Hero.mY; 
+             y < MAPMAXROWS-1 && !isOcclusive (x, y);
+             y++)
+        {
+            mVisibility[x+1][y] = mVisibility[x+1][y+1] = 
+                mVisibility[x][y+1] = 1;
+        }
+        for (x = Hero.mX+1, y = Hero.mY; y > 0 && !isOcclusive (x, y);
+             y--)
+        {
+            mVisibility[x+1][y] = mVisibility[x+1][y-1] = 
+                mVisibility[x][y-1] = 1;
+        }
+    }
+
+
+
+
 
     Hero.spotStuff ();
 #if 0

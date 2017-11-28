@@ -14,23 +14,23 @@ shProfession *Quarterback;
 shProfession *Psion;
 shProfession *Cracker;
 
-shProfession::shProfession (char *name,
+shProfession::shProfession (const char *name,
                             int hitdiesize,
                             int numskills,
                             int bab,
                             int reflex,
                             int will,
                             shHeroInitFunction *f,
-                            char *t1,
-                            char *t2,
-                            char *t3,
-                            char *t4,
-                            char *t5,
-                            char *t6,
-                            char *t7,
-                            char *t8,
-                            char *t9,
-                            char *t10)
+                            const char *t1,
+                            const char *t2,
+                            const char *t3,
+                            const char *t4,
+                            const char *t5,
+                            const char *t6,
+                            const char *t7,
+                            const char *t8,
+                            const char *t9,
+                            const char *t10)
 {
     mId = Professions.add (this);
     mName = name;
@@ -81,7 +81,7 @@ initSoftwareEngineer (shHero *hero)
     hero->addSkill (kHeavyGun, 1);
     hero->addSkill (kUnarmedCombat, 0);
     hero->addSkill (kMeleeWeapon, 1);
-    hero->addSkill (kSword, 0);
+    hero->addSkill (kSword, 1);
 
     hero->addSkill (kConcentration, 2);
     //hero->addSkill (kHide, 1);
@@ -91,7 +91,7 @@ initSoftwareEngineer (shHero *hero)
     hero->addSkill (kSearch, 4);
     hero->addSkill (kHacking, 3);
     //hero->addSkill (kListen, 3);
-    hero->addSkill (kSpot, 3);
+    hero->addSkill (kSpot, 2);
     
     hero->gainRank (kHacking, 2);
 
@@ -123,7 +123,7 @@ initSoftwareEngineer (shHero *hero)
     
     shObject *nc = createObject ("debugged canister of nano cola", 0);
     nc->identify ();
-    nc->mCount = RNG (1, 6);
+    nc->mCount = RNG (1, 2);
     hero->addObjectToInventory (nc, 1);
 
     shObject *dt = createObject ("debugged roll of duct tape", 0);
@@ -198,7 +198,7 @@ initCracker (shHero *hero)
 
     shObject *nc = createObject ("debugged canister of nano cola", 0);
     nc->identify ();
-    nc->mCount = RNG (1, 6);
+    nc->mCount = RNG (1, 2);
     hero->addObjectToInventory (nc, 1);
 
     shObject *dt = createObject ("debugged roll of duct tape", 0);
@@ -229,13 +229,14 @@ initSpaceMarine (shHero *hero)
     hero->mMaxHP = SpaceMarine->mHitDieSize + 
         ABILITY_MODIFIER (hero->getCon ());
     
-    hero->addSkill (kGrenade, 4);
+    hero->mBAB = 1;
+    hero->addSkill (kGrenade, 3);
     hero->addSkill (kHandgun, 4);
     hero->addSkill (kLightGun, 4);
     hero->addSkill (kHeavyGun, 4);
-    hero->addSkill (kUnarmedCombat, 1);
-    hero->addSkill (kMeleeWeapon, 2);
-    hero->addSkill (kSword, 2);
+    hero->addSkill (kUnarmedCombat, 3);
+    hero->addSkill (kMeleeWeapon, 3);
+    hero->addSkill (kSword, 1);
 
     hero->addSkill (kConcentration, 0);
     //hero->addSkill (kHide, 0);
@@ -252,7 +253,7 @@ initSpaceMarine (shHero *hero)
     hero->gainRank (kLightGun, 2);
     hero->gainRank (kHeavyGun, 2);
 
-    hero->don (createObject ("debugged +0 flak jacket", 0), 1);
+    hero->don (createObject ("debugged +1 flak jacket", 0), 1);
     hero->mBodyArmor->identify ();
     hero->addObjectToInventory (hero->mBodyArmor, 1);
 
@@ -260,7 +261,7 @@ initSpaceMarine (shHero *hero)
     pistol->identify ();
     hero->addObjectToInventory (pistol, 1);
 
-    hero->wield (createObject ("debugged +1 pulse rifle", 0), 1);
+    hero->wield (createObject ("debugged +0 pulse rifle", 0), 1);
     hero->mWeapon->identify ();
     hero->addObjectToInventory (hero->mWeapon, 1);
 
@@ -292,7 +293,7 @@ initQuarterback (shHero *hero)
     hero->addSkill (kLightGun, 2);
     hero->addSkill (kHeavyGun, 2);
     hero->addSkill (kUnarmedCombat, 4);
-    hero->addSkill (kMeleeWeapon, 4);
+    hero->addSkill (kMeleeWeapon, 3);
     hero->addSkill (kSword, 2);
 
     hero->addSkill (kConcentration, 2);
@@ -308,13 +309,17 @@ initQuarterback (shHero *hero)
     hero->gainRank (kGrenade, 2);
     hero->gainRank (kSpot, 2);
 
-    hero->don (createObject ("debugged +0 football uniform", 0), 1);
+    hero->don (createObject ("debugged +0 set of football pads", 0), 1);
     hero->mBodyArmor->identify ();
     hero->addObjectToInventory (hero->mBodyArmor, 1);
 
     hero->don (createObject ("debugged +0 football helmet", 0), 1);
     hero->mHelmet->identify ();
     hero->addObjectToInventory (hero->mHelmet, 1);
+
+    hero->wield (createObject ("1 debugged +3 football", 0), 1);
+    hero->mWeapon->identify ();
+    hero->addObjectToInventory (hero->mWeapon, 1);
 
     hero->addObjectToInventory (createObject ("200 energy cells", 0), 1);
 
@@ -342,12 +347,12 @@ initPsion (shHero *hero)
         ABILITY_MODIFIER (hero->getCon ());
 
     hero->addSkill (kGrenade, 1);
-    hero->addSkill (kHandgun, 1);
-    hero->addSkill (kLightGun, 2);
+    hero->addSkill (kHandgun, 2);
+    hero->addSkill (kLightGun, 1);
     hero->addSkill (kHeavyGun, 1);
     hero->addSkill (kUnarmedCombat, 1);
     hero->addSkill (kMeleeWeapon, 1);
-    hero->addSkill (kSword, 2);
+    hero->addSkill (kSword, 4);
 
     hero->addSkill (kConcentration, 4);
     //hero->addSkill (kHide, 2);
@@ -362,15 +367,16 @@ initPsion (shHero *hero)
     hero->addSkill (kMutantPower, 4, kIllumination);
     hero->addSkill (kMutantPower, 4, kDigestion);
     hero->addSkill (kMutantPower, 4, kHypnosis);
-    hero->addSkill (kMutantPower, 4, kOpticBlast);
-    hero->addSkill (kMutantPower, 4, kTelepathyPower);
-    hero->addSkill (kMutantPower, 4, kMentalBlast);
     hero->addSkill (kMutantPower, 4, kRegeneration);
+    hero->addSkill (kMutantPower, 4, kOpticBlast);
     hero->addSkill (kMutantPower, 4, kHaste);
-    hero->addSkill (kMutantPower, 4, kXRayVisionPower);
+    hero->addSkill (kMutantPower, 4, kTelepathyPower);
+    hero->addSkill (kMutantPower, 4, kShootWebs);
+    hero->addSkill (kMutantPower, 4, kMentalBlast);
     hero->addSkill (kMutantPower, 4, kPyrokinesis);
     hero->addSkill (kMutantPower, 4, kRestoration);
     hero->addSkill (kMutantPower, 4, kAdrenalineControl);
+    hero->addSkill (kMutantPower, 4, kXRayVisionPower);
     hero->addSkill (kMutantPower, 4, kTelekinesis);
     hero->addSkill (kMutantPower, 4, kInvisibility);
     hero->addSkill (kMutantPower, 4, kCharm);
@@ -397,19 +403,91 @@ initPsion (shHero *hero)
 
     hero->addObjectToInventory (createObject ("200 energy cells", 0), 1);
 
-    shObject *nc = createObject ("4 debugged canisters of nano cola", 0);
+    shObject *nc = createObject ("2 debugged canisters of nano cola", 0);
     nc->identify ();
     hero->addObjectToInventory (nc, 1);
+
+    shObject *hc = createObject ("1 debugged canister of healing", 0);
+    hc->identify ();
+    hero->addObjectToInventory (hc, 1);
+
+    shObject *rac = createObject ("1 debugged canister of Rad-Away", 0);
+    rac->identify ();
+    hero->addObjectToInventory (rac, 1);
 
     hero->addObjectToInventory (createMoney (RNG (1, 10) + RNG (1, 10)), 1);
 
 }
 
 
+static void
+initJanitor (shHero *hero)
+{
+    hero->mProfession = Janitor;
+    hero->rollAbilityScores (10, 12, 10, 12, 8, 10, 8);
+
+    hero->mMaxHP = Janitor->mHitDieSize + 
+        ABILITY_MODIFIER (hero->getCon ());
+
+    //hero->mInateResistances[kSickening] = 122; 
+
+    hero->addSkill (kGrenade, 1);
+    hero->addSkill (kHandgun, 3);
+    hero->addSkill (kLightGun, 1);
+    hero->addSkill (kHeavyGun, 1);
+    hero->addSkill (kUnarmedCombat, 2);
+    hero->addSkill (kMeleeWeapon, 3);
+    hero->addSkill (kSword, 1);
+
+    hero->addSkill (kConcentration, 2);
+    //hero->addSkill (kHide, 2);
+    //hero->addSkill (kMoveSilently, 2);
+    hero->addSkill (kOpenLock, 4);
+    hero->addSkill (kRepair, 4);
+    hero->addSkill (kSearch, 4);
+    hero->addSkill (kHacking, 0);
+    //hero->addSkill (kListen, 3);
+    hero->addSkill (kSpot, 4);
+    
+    hero->gainRank (kSpot, 2);
+    hero->gainRank (kSearch, 2);
+    hero->gainRank (kRepair, 2);
+
+
+    hero->wield (createObject ("debugged +1 mop", 0), 1);
+    hero->mWeapon->identify ();
+    hero->addObjectToInventory (hero->mWeapon, 1);
+
+    hero->don (createObject ("debugged +1 janitor uniform", 0), 1);
+    hero->mJumpsuit->identify ();
+    hero->addObjectToInventory (hero->mJumpsuit, 1);
+    
+    shObject *sg = createObject ("debugged canister of super glue", 0);
+    sg->identify ();
+    hero->addObjectToInventory (sg, 1);
+
+    shObject *mw = createObject ("optimized monkey wrench", 0);
+    mw->identify ();
+    hero->addObjectToInventory (mw, 1);
+
+    shObject *kc = createObject ("debugged master keycard", 0);
+    kc->identify ();
+    hero->addObjectToInventory (kc, 1);
+
+    shObject *bolt = createObject ("debugged restraining bolt", 0);
+    bolt->identify ();    
+    hero->addObjectToInventory (bolt, 1);
+
+    hero->addObjectToInventory (createObject ("75 energy cells", 0), 1);
+
+    hero->addObjectToInventory (createMoney (RNG (1, 100)), 1);
+}
+
+
+
 void
 initializeProfessions ()
 {
-/*    Janitor = new shProfession ("janitor", 8, 2, initJanitor, ... */
 
     Psion = new shProfession ("psion", 8, 3, 3, 2, 2, initPsion,
                               "Odd Ball",
@@ -426,11 +504,11 @@ initializeProfessions ()
     SoftwareEngineer = new shProfession ("software engineer", 8, 3, 3, 1, 2,
                                          initSoftwareEngineer,
                                          "Summer Intern",
-                                         "Q/A tester",
+                                         "Q/A Tester",
                                          "Web Designer",
-                                         "Help Desk jockey",
+                                         "Help Desk Jockey",
                                          "Jr. Programmer",
-                                         "Sys Admin",
+                                         "Sysadmin",
                                          "Programmer",
                                          "Lead Programmer",
                                          "VP Engineering",
@@ -447,8 +525,20 @@ initializeProfessions ()
                                 "Decker",
                                 "Sneaker",
                                 "Phreaker",
-                                "The One");
+                                "One");
 
+    Janitor = new shProfession ("janitor", 8, 3, 3, 2, 2, 
+                                initJanitor,
+                                "Toilet Scrubber",
+                                "Mop Boy",
+                                "Janitor",
+                                "Housekeeper",
+                                "Custodian",
+                                "Maintenance Man",
+                                "Sanitation Engineer",
+                                "Superintendent",
+                                "Property Manager",
+                                "Landlord");
 /* decker?  */
 
     SpaceMarine = new shProfession ("space marine", 10, 2, 4, 2, 1,
@@ -483,10 +573,10 @@ initializeProfessions ()
 shProfession *
 chooseProfession ()
 {
-    void *result = NULL;
+    const void *result = NULL;
     shMenu menu ("Choose your profession", 0);
 
-//    menu.addItem ('j', "Janitor", Janitor);
+    menu.addItem ('j', "Janitor", Janitor);
     menu.addItem ('m', "Space Marine", SpaceMarine);
     menu.addItem ('p', "Psion", Psion);
     menu.addItem ('q', "Quarterback", Quarterback);

@@ -65,7 +65,10 @@ shHero::quaffFromVat (shFeature *vat)
     case 2:
         mRad -= RNG (1, 200);
         mRad = maxi (0, mRad);
-        I->p ("You feel purified!");
+        if (!mRad)
+            I->p ("You feel purified!");
+        else 
+            I->p ("You feel less contaminated.");
         break;
     case 3:
         mHP += NDX (4, 6);
@@ -100,7 +103,7 @@ shHero::quaffFromVat (shFeature *vat)
     case 8:
         I->p ("Oops!  You fall in!  You are covered in slime!");
         damageEquipment (&VatCorrosionAttack, kCorrosive);
-        I->p ("You climb out of the vat");
+        I->p ("You climb out of the vat.");
         break;
     case 9:
     {

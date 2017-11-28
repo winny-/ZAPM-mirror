@@ -45,9 +45,9 @@ typedef void (shHeroInitFunction) (shHero *);
 struct shProfession
 {
     int mId;
-    char *mName;         /* generic name, e.g. "janitor" */
+    const char *mName;        /* generic name, e.g. "janitor" */
     int mHitDieSize;
-    char *mTitles[10];
+    const char *mTitles[10];
 
     int mNumPracticedSkills;  /* num skill points earned per level */
     int mBAB;                 /* BAB = level * mBAB / 4 */
@@ -63,19 +63,19 @@ struct shProfession
     shHeroInitFunction *mInitFunction;
 
     //constructor:
-    shProfession (char *name, int hitdiesize, int numskills,
+    shProfession (const char *name, int hitdiesize, int numskills,
                   int bab, int reflex, int will,
                   shHeroInitFunction *f,
-                  char *t1,
-                  char *t2,
-                  char *t3,
-                  char *t4,
-                  char *t5,
-                  char *t6,
-                  char *t7,
-                  char *t8,
-                  char *t9,
-                  char *t10);
+                  const char *t1,
+                  const char *t2,
+                  const char *t3,
+                  const char *t4,
+                  const char *t5,
+                  const char *t6,
+                  const char *t7,
+                  const char *t8,
+                  const char *t9,
+                  const char *t10);
 
     void addStartingEquipment (shObject *, int chance);
 

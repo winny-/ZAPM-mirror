@@ -4,7 +4,8 @@
 
 how to add a mutant power:
 1. edit shMutantPower enum in Global.h
-2. edit the little table below, and make sure the order is consistent!
+2. edit the little table below, and make sure the order is consistent with
+   the enum!
 3. write a usePower function, or startPower/stopPower functions
 4. possibly write shCreature::Power function if you want monsters to use it too
 5. add the appropriate skill to the Psion and maybe other character classes
@@ -58,11 +59,8 @@ shCreature::willSave (int DC)
 int
 shCreature::digestion (shObject *obj)
 {
-    char buf[64];
-
     if (isHero ()) {
-        obj->your (buf, 64);
-        I->p ("You devour %s.", buf);
+        I->p ("You devour %s.", YOUR (obj));
     } else {
         abort ();
     }
@@ -100,7 +98,6 @@ shCreature::hypnosis (shDirection dir)
     if (mLevel->moveForward (dir, &x, &y) &&
         (target = mLevel->getCreature (x, y)))
     {
-        char t_buf[64];
         int saved = target->hasBrainShield () || 
                     target->willSave (getPsionicDC (1));
 
@@ -114,10 +111,12 @@ shCreature::hypnosis (shDirection dir)
                 target->makeAsleep (NDX (2, 10) * 1000);
             }
         } else {
+            const char *t_buf;
+
             if (Hero.canSee (target)) {
-                target->the (t_buf, 64);
+                t_buf = THE (target);
             } else {
-                snprintf (t_buf, 64, "it");
+                t_buf = "it";
             }
             if (!target->canSee (this)) {
                 I->p ("%s doesn't seem to notice your gaze.");
@@ -135,8 +134,67 @@ shCreature::hypnosis (shDirection dir)
 }
 
 
+shAttack WebAttack = 
+    shAttack (NULL, shAttack::kWeb, shAttack::kSingle, kAimed | kPsychic, 
+              kWebbing, 0, 6, 
+              FULLTURN, 1, 12);
+
+int
+shCreature::shootWeb (shDirection dir)
+{
+    int x, y, r;
+    int maxrange = shortRange (this);
+    int elapsed = 800;
+    int attackmod;
+
+    shSkill *skill = getSkill (kMutantPower, kShootWebs);
+
+
+    WebAttack.mDamage[0].mNumDice = mCLevel / 2 + 1 
+                                  + skill ? 2 * skill->mRanks : 0;
+
+    attackmod = mBAB + mToHitModifier 
+              + getSkillModifier (kMutantPower, kShootWebs);
+
+    if (kUp == dir) {
+        return elapsed;
+    } else if (kDown == dir) {
+        resolveRangedAttack (&WebAttack, NULL, attackmod, this);
+        return elapsed;
+    }
+
+    x = mX;    y = mY;
+
+    while (maxrange--) {
+        shFeature *f = Level->getFeature (x, y);
+
+        if (!Level->moveForward (dir, &x, &y)) {
+            Level->moveForward (uTurn (dir), &x, &y);
+            return elapsed;
+        }
+
+        if (Level->isOccupied (x, y)) {
+            shCreature *c = Level->getCreature (x, y);
+            if (c->mZ < 0 && f) {
+                /* sails overhead.  This is a kludge to avoid confusion over
+                   the cause of mTrapped (pit or web?) */
+                continue;
+            }
+            r = resolveRangedAttack (&WebAttack, NULL, attackmod, c);
+            if (r >= 0) 
+                return elapsed;
+        }
+        if (Level->isObstacle (x, y)) {
+            return elapsed;
+        }
+    }
+
+    return elapsed;
+}
+
+
 shAttack OpticBlastAttack = 
-    shAttack (NULL, shAttack::kLaser, shAttack::kSingle, kAimed | kPsychic, 
+    shAttack (NULL, shAttack::kLaser, shAttack::kBeam, kAimed | kPsychic, 
               kLaser, 0, 6, 
               FULLTURN, 1, 12);
 
@@ -144,7 +202,7 @@ int
 shCreature::opticBlast (shDirection dir)
 {
     int x, y;
-    int maxrange = shortRange (this);
+    //int maxrange = shortRange (this);
     int elapsed = 800;
 
     OpticBlastAttack.mDamage[0].mNumDice = mCLevel;
@@ -158,51 +216,13 @@ shCreature::opticBlast (shDirection dir)
 
     x = mX;    y = mY;
 
-    while (maxrange--) {
-        shFeature *f;
+    int attackmod = getSkillModifier (kMutantPower, kOpticBlast)
+                   + mBAB + mToHitModifier;
 
-        if (!Level->moveForward (dir, &x, &y)) {
-            Level->moveForward (uTurn (dir), &x, &y);
-            return elapsed;
-        }
-
-        if (Level->isOccupied (x, y)) {
-            shCreature *c = Level->getCreature (x, y);
-            resolveRangedAttack (NULL, &OpticBlastAttack, 
-                                 mBAB + 
-                                 getSkillModifier (kMutantPower, kOpticBlast), 
-                                 c);
-        }
-
-        f = Level->getFeature (x, y);
-        if (f) {
-            switch (f->mType) {
-            case shFeature::kDoorHiddenVert:
-            case shFeature::kDoorHiddenHoriz:
-            case shFeature::kDoorBerserkClosed:
-            case shFeature::kDoorClosed:
-            case shFeature::kComputerTerminal:
-            case shFeature::kPortal: 
-                if (Level->areaEffectFeature (&OpticBlastAttack, x, y, this)) {
-                    return elapsed;
-                }
-                break;
-            case shFeature::kStairsUp:
-            case shFeature::kStairsDown:
-            case shFeature::kRadTrap:
-            case shFeature::kDoorOpen:
-            case shFeature::kDoorBerserkOpen:
-            case shFeature::kMaxFeatureType: 
-                /* these features it will fly right past */
-                break;
-            }
-        }
-        
-        if (Level->isObstacle (x, y)) {
-            return elapsed;
-        }
-    }
-
+    int foo = Level->areaEffect (&OpticBlastAttack, NULL, mX, mY, 
+                                 dir, this, attackmod);
+    if (foo < 0)
+        return foo;
     return elapsed;
 }
 
@@ -248,7 +268,7 @@ shCreature::mentalBlast (int x, int y)
 {
     shCreature *c = mLevel->getCreature (x, y);
     int elapsed = 1500;
-    char t_buf[64];
+    const char *t_buf;
     int shielded;
     shAttack *atk;
     
@@ -257,7 +277,7 @@ shCreature::mentalBlast (int x, int y)
     }
     shielded = c->hasBrainShield ();
 
-    c->the (t_buf, 64);
+    t_buf = THE (c);
 
     if (c->isHero ()) {
         if (isHero ()) {
@@ -279,13 +299,12 @@ shCreature::mentalBlast (int x, int y)
             if (!canSee (c)) {      
                 Level->setVisible (x, y, 1);
                 Level->drawSqCreature (x, y);
-                c->the (t_buf, 64);
+                t_buf = THE (c);
                 Level->setVisible (x, y, 0);
                 I->p ("You blast %s with a wave psionic energy.", t_buf);
                 I->pauseXY (x, y);
             } else {
-                c->the (t_buf, 64);
-                I->p ("You blast %s with a wave psionic energy.", t_buf);
+                I->p ("You blast %s with a wave psionic energy.", THE (c));
             }
         } else if (!canSee (x, y)) {
             return elapsed;
@@ -293,7 +312,7 @@ shCreature::mentalBlast (int x, int y)
     }
     if (!c->hasMind () || c->hasBrainShield ()) {
         if (Hero.canSee (x, y)) {
-            I->p ("%s is unaffected", t_buf);
+            I->p ("%s is not affected.", t_buf);
         }
         return elapsed;
     }
@@ -342,7 +361,7 @@ shCreature::restoration ()
     for (i = 0; i < 7; i++) {
         int a = mAbil.getByIndex (permute[i]);
         int m = mMaxAbil.getByIndex (permute[i]);
-        int b = RNG (1, 4);
+        int b = RNG (2, 4);
 
         if (isHero () && kCha == permute[i]) { 
            /* don't restore charisma drain */
@@ -491,17 +510,17 @@ shAttack BurningGogglesAttack =
 static int
 useOpticBlast (shHero *h)
 {
-    if (h->isBlind ()) {
-        if ((h->hasPerilSensing () && h->mGoggles->isToggled ()) ||
-            (h->mGoggles && h->mGoggles->isA ("blindfold")))
-        {
-            I->p ("You incinerate your goggles!");
-            if (h->sufferDamage (&BurningGogglesAttack)) {
-                h->die (kMisc, "Burned his face off");
-            }
-            h->removeObjectFromInventory (h->mGoggles);
-            return FULLTURN;
+    if ((h->hasPerilSensing () && h->mGoggles->isToggled ()) ||
+        (h->mGoggles && h->mGoggles->isA ("blindfold")))
+    {
+        I->p ("You incinerate your goggles!");
+        if (h->sufferDamage (&BurningGogglesAttack)) {
+            h->die (kMisc, "Burned his face off");
         }
+        h->removeObjectFromInventory (h->mGoggles);
+        return FULLTURN;
+    }
+    if (h->isBlind ()) {
         I->p ("But you are blind!");
         return 0;
     } else {
@@ -574,11 +593,23 @@ useIllumination (shHero *h)
             if (Level->isInBounds (x, y) && Level->isInLOS (x, y)
                 && distance (x, y, h->mX, h->mY) < radius * 5) 
             {
-                Level->setLit (x, y, 1);
+                Level->setLit (x, y, 1, 1, 1, 1);
             }
         }
     }
     return 500;
+}
+
+
+static int
+useWeb (shHero *h)
+{
+    shDirection dir = I->getDirection ();
+    if (kNoDirection == dir) {
+        return 0;
+    } else {
+        return h->shootWeb (dir);
+    }
 }
 
 
@@ -598,7 +629,7 @@ useMentalBlast (shHero *h)
 
 struct MutantPower { 
     int mLevel;
-    char *mName; 
+    const char *mName; 
     int (*mFunc) (shHero *);
     int (*mOffFunc) (shHero *);
 
@@ -615,6 +646,7 @@ MutantPower MutantPowers[kMaxMutantPower] =
   { 2, "Optic Blast", useOpticBlast, NULL },
   { 2, "Haste", useHaste, stopHaste },
   { 2, "Telepathy", useTelepathy, stopTelepathy },
+  { 2, "Web", useWeb, NULL },
   { 3, "Mental Blast", useMentalBlast, NULL},
   { 3, "Pyrokinesis", NULL, NULL },
   { 3, "Restoration", useRestoration, NULL },
@@ -672,7 +704,7 @@ shHero::useMutantPower ()
         return 0;
     }
     i = 0;
-    menu.getResult ((void **) &i, NULL);
+    menu.getResult ((const void **) &i, NULL);
     if (i) {
         int score;
 
@@ -792,7 +824,7 @@ int
 shMonster::useMutantPower ()
 {
     shMutantPower power;
-    char buf[50];
+    const char *who;
     int attempts;
     int x0, y0, x, y, res;
 
@@ -800,21 +832,41 @@ shMonster::useMutantPower ()
         return 0;
     }
 
-    the (buf, 50);
+    who = the ();
     
-    for (attempts = 10; attempts; --attempts) {
+    for (attempts = 20; attempts; --attempts) {
         power = (shMutantPower) RNG (kMaxMutantPower);
         if (!mIlk->mMutantPowers[power]) continue;
 
         switch (power) {
         case kHypnosis:
-            if (!areAdjacent (this, &Hero) || Hero.isAsleep ()) 
+            if (!areAdjacent (this, &Hero) || Hero.isAsleep () || 
+                Hero.isParalyzed () || Hero.isBlind ()) 
+            {
                 continue;
+            }
             if (Hero.canSee (this)) {
-                I->p ("%s gazes into your eyes.", buf);
+                I->p ("%s gazes into your eyes.", who);
             }
             mSpellTimer = Clock + 10000;
             return hypnosis (vectorDirection (mX, mY, Hero.mX, Hero.mY));
+        case kOpticBlast:
+            if (!canSee (&Hero))
+                continue;
+            {
+                shDirection dir = linedUpDirection (this, &Hero);
+                if (kNoDirection == dir)
+                    continue;
+                if (Hero.canSee (this)) {
+                    I->p ("%s shoots a laser beam out of %s!", 
+                          who, her ("eyes"));
+                } else {
+                    I->p ("Someone shoots a laser beam out of %s!", 
+                          her ("eyes")); 
+                    Level->feelSq (mX, mY);
+                }
+                return opticBlast (dir);
+            } 
         case kMentalBlast:
             if (!canSee (&Hero) && (!hasTelepathy () ||
                                     distance (&Hero, mX, mY) >= 40))
@@ -822,7 +874,7 @@ shMonster::useMutantPower ()
                 continue;
             }
             if (Hero.canSee (this) && numHands ()) {
-                I->p ("%s concentrates.", buf);
+                I->p ("%s concentrates.", who);
             }
             mSpellTimer = Clock + 10000;
             return mentalBlast (Hero.mX, Hero.mY);
@@ -830,14 +882,18 @@ shMonster::useMutantPower ()
             if (mHP >= mMaxHP) 
                 continue;
             if (Hero.canSee (this)) {
-                I->p ("%s looks better.", buf);
+                if (numHands ())
+                    I->p ("%s concentrates.", who);
+                I->p ("%s looks better.", who);
             }
             mSpellTimer = Clock + 1000;
             return regeneration ();
         case kTeleport:
-            if (mHP < mMaxHP / 4 && canSee (&Hero)) {
+            if ((mHP < mMaxHP / 4 || isFleeing ()) && canSee (&Hero)) {
                 /* escape to safety */
                 x = -1, y = -1;
+                /* make double teleport less likely */
+                mSpellTimer = Clock + RNG (10000); 
             } else if (hasTelepathy () && mHP == mMaxHP && !RNG (10)) {
                 /* teleport in to make trouble */
                 x = Hero.mX;
@@ -845,10 +901,10 @@ shMonster::useMutantPower ()
                 if (mLevel->findNearbyUnoccupiedSquare (&x, &y)) {
                     return 0;
                 }
+                mSpellTimer = Clock + 1000;
             } else {
                 continue;
             }
-            mSpellTimer = Clock + 1000;
             res = transport (x, y, 100);
             return (-1 == res) ? -1 : FULLTURN;
         case kTerrify:
@@ -858,9 +914,10 @@ shMonster::useMutantPower ()
                 continue;
             }
             if (Hero.canSee (this) && numHands ()) {
-                I->p ("%s concentrates.", buf);
+                I->p ("%s concentrates.", who);
             }
-            if (!Hero.hasBrainShield () &&
+            if (!Hero.hasBrainShield () && 
+                !Hero.isConfused () && !Hero.isStunned () &&
                 !willSave (getPsionicDC (3))) 
             {
                 I->p ("You suddenly feel very afraid!");
@@ -871,19 +928,20 @@ shMonster::useMutantPower ()
             mSpellTimer = Clock + 10000;
             return FULLTURN;
         case kDarkness:
+            if (RNG (4)) /* a rarely used power */
+                continue;
             if (!canSee (&Hero)) {
                 continue;
             }
-            if (mLevel->isLit (mX, mY)) {
+            if (mLevel->isLit (mX, mY, Hero.mX, Hero.mY)) {
                 x0 = mX;
                 y0 = mY;
-                I->p ("%s is surrounded by darkness!", buf);
-/*
-            } else if (mLevel->isLit (Hero.mX, Hero.mY)) {
+                if (Hero.canSee (this))
+                    I->p ("%s is surrounded by darkness!", who);
+            } else if (mLevel->isLit (Hero.mX, Hero.mY, Hero.mX, Hero.mY)) {
                 x0 = Hero.mX;
                 y0 = Hero.mY;
                 I->p ("You are surrounded by darkness!");
-*/
             } else {
                 continue;
             }
@@ -892,7 +950,7 @@ shMonster::useMutantPower ()
                     if (distance (x, y, x0, y0) <= 25 && 
                         mLevel->existsLOS (x, y, x0, y0))
                     {
-                        mLevel->setLit (x, y, 0);
+                        mLevel->setLit (x, y, -1, -1, -1, -1);
                     }
                 }
             }
@@ -902,6 +960,88 @@ shMonster::useMutantPower ()
             }
             mSpellTimer = Clock + 2000;
             return FULLTURN;
+        case kCeaseAndDesist:
+            if (!areAdjacent (this, &Hero) || Hero.isParalyzed () || Hero.isAsleep ()) 
+                continue;
+            I->p ("%s reads a cease and desist letter to you!", who);
+            if (Hero.hasBrainShield () || willSave (getPsionicDC (4))) {
+                I->p("But you ignore it.");
+            }  else {
+                Hero.makeParalyzed (1000 * NDX (2, 6));
+            }
+            mSpellTimer = Clock + 2000;
+            return FULLTURN;
+        case kSeizeEvidence:
+            if (!areAdjacent (this, &Hero) || isFleeing ())
+                continue;
+            if ((Hero.isParalyzed () || Hero.isAsleep ()) && RNG (4)) 
+                /* hard for lawyer to seize your stuff unless you're helpless */
+                continue;
+
+            {
+                I->p ("%s rifles through your pack!", who);
+            
+                shObjectVector v;
+                selectObjectsByFunction (&v, Hero.mInventory, &shObject::isCracked);
+                if (v.count ()) {
+                    int i = selectObjects (&v, Hero.mInventory, Computer);
+                    I->p ("%s seizes your pirated software%s",
+                          who,
+                          i > 1 ? " and your computers!" : 
+                          1 == i ? " and your computer!" : "!");
+                    for (i = 0; i < v.count (); i++) {
+                        shObject *obj = v.get (i);
+                        Hero.removeObjectFromInventory (obj);
+                        addObjectToInventory (obj);
+                    }
+                    makeFleeing (RNG (50000));
+                }
+            }
+            mSpellTimer = Clock + 1000;
+            return LONGTURN;
+        case kSueForDamages:
+            if (!areAdjacent (this, &Hero) || isFleeing ())
+                continue;
+            
+            I->p ("%s sues you for damages!", who);
+            x = Hero.loseMoney (NDX (mCLevel, 100));
+            if (x) {
+                gainMoney (x);
+            } else {
+                I->p ("But you're broke!");
+                makeFleeing (RNG (50000));
+            }
+            mSpellTimer = Clock + 1000;
+            return FULLTURN;
+        case kSummonWitness:
+            if (!areAdjacent (this, &Hero) || isFleeing ())
+                continue;
+            {
+                shMonsterIlk *ilk;
+                shMonster *mon;
+
+                do {
+                    ilk = pickAMonsterIlk(RNG((Level->mDLevel+mCLevel+1)/2)); 
+                } while (!ilk);
+                mon = new shMonster (ilk);
+                x = Hero.mX;
+                y = Hero.mY;
+                if (Level->findNearbyUnoccupiedSquare (&x, &y)) {
+                    /* nowhere to put it */
+                    delete mon;
+                    res = transport (-1, -1, 100);
+                    return (-1 == res) ? -1 : FULLTURN;
+                }
+                if (Level->putCreature (mon, x, y)) {
+                    /* shouldn't happen */
+                    return FULLTURN;
+                }
+                mon->mDisposition = kHostile;
+                I->p ("%s summons a hostile witness!", who);
+                mSpellTimer = Clock + 1000;
+                return FULLTURN;
+            }
+
         default:
             break;
         }

@@ -26,7 +26,7 @@ initializeMonsters ()
 };
 
 //constructor:
-shMonsterIlk::shMonsterIlk (char *name,
+shMonsterIlk::shMonsterIlk (const char *name,
                             shCreatureType ty,
                             shMonsterIlk *parent,
                             shThingSize size,
@@ -35,6 +35,7 @@ shMonsterIlk::shMonsterIlk (char *name,
                             int str, int con, int agi, int dex,
                             int in, int wis, int cha,
                             int speed,
+                            int gender,
                             int numhands,
                             int ac, /*natural armor bonus */
                             int numappearingdice,
@@ -64,12 +65,14 @@ shMonsterIlk::shMonsterIlk (char *name,
     mWis = wis;
     mCha = cha;
     mSpeed = speed;
+    mGender = gender;
     mNumHands = numhands;
     mNaturalArmorBonus = ac;
     mInateIntrinsics = 0;
     for (i = 0; i < kMaxEnergyType; i++) {
         mInateResistances[i] = 0;
     }
+    mFeats = 0;
     mNumAppearingDice = numappearingdice;
     mNumAppearingDieSides = numappearingdiesides;
     mDefaultStrategy = strategy;
@@ -153,7 +156,7 @@ shMonsterIlk::addRangedAttack (shAttack::Type type,
 
 
 void
-shMonsterIlk::addEquipment (char *description)
+shMonsterIlk::addEquipment (const char *description)
 {
     mStartingEquipment.add (description);
 }
@@ -170,6 +173,11 @@ shMonsterIlk::addResistance (shEnergyType energy, int amount)
     mInateResistances[energy] = amount;
 }
 
+void
+shMonsterIlk::addFeat (shFeat feat)
+{
+    mFeats |= feat;
+}
 
 
 //constructor:
@@ -202,6 +210,7 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
     memcpy (mInateResistances, ilk->mInateResistances, 
             sizeof (mInateResistances));
     mInateIntrinsics = ilk->mInateIntrinsics;
+    mFeats = ilk->mFeats;
 
 #define IMMUNE 122
 
@@ -244,6 +253,8 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kHealing] = IMMUNE;
         mInateResistances[kRestoring] = IMMUNE;
         mInateResistances[kChoking] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
         break;
     case kDroid:
         diesize = 8;
@@ -254,6 +265,8 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kHealing] = IMMUNE;
         mInateResistances[kRestoring] = IMMUNE;
         mInateResistances[kChoking] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
         break;
     case kProgram:
         diesize = 8;
@@ -264,6 +277,8 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kHealing] = IMMUNE;
         mInateResistances[kRestoring] = IMMUNE;
         mInateResistances[kChoking] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
         break;
     case kConstruct:
         diesize = 8;
@@ -272,6 +287,8 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kRadiological] = IMMUNE;
         mInateResistances[kStunning] = IMMUNE;
         mInateResistances[kChoking] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
         break;
     case kOoze:
         diesize = 8;
@@ -280,20 +297,27 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kMagnetic] = IMMUNE;
         mInateResistances[kRadiological] = IMMUNE;
         mInateResistances[kChoking] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
         break;
-    case kAbberation:
+    case kAberration:
         diesize = 8;
         mBAB = mCLevel * 3 / 4;
         mInateResistances[kMagnetic] = IMMUNE;
         mInateResistances[kRadiological] = IMMUNE;
+        mInateResistances[kViolating] = IMMUNE;
         break;
     case kCyborg:
         diesize = 8;
         mBAB = mCLevel;
         mInateResistances[kPoisonous] = 2;
         mInateResistances[kRadiological] = 10;
+        mInateIntrinsics |= kBreathless;
         break;
     case kEgg:
+        mInateResistances[kViolating] = IMMUNE;
+        mInateIntrinsics |= kBreathless;
+        /* fall through */
     case kBeast:
         diesize = 8;
         mBAB = mCLevel;
@@ -305,6 +329,7 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mBAB = mCLevel * 3 / 4;
         mInateResistances[kMagnetic] = IMMUNE;
         mInateIntrinsics |= kScent;
+        mInateIntrinsics |= kCanSwim;
         break;
     case kAlien:
         diesize = 8;
@@ -323,14 +348,17 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         mInateResistances[kMagnetic] = IMMUNE;
     }
 
+    if (3 == mIlk->mGender) {
+        mGender = RNG (1, 2);
+    } else {
+        mGender = mIlk->mGender;
+    }
+
     /* roll ability scores */
     rollAbilityScores (mIlk->mStr, mIlk->mCon, mIlk->mAgi, mIlk->mDex,
                        mIlk->mInt, mIlk->mWis, mIlk->mCha);
 
     /* roll hit points */
-    if (mCLevel < 1) {
-        diesize /= 2;
-    }
     rollHitPoints (mIlk->mHitDice, diesize);
 
     /* setup speed */
@@ -341,7 +369,7 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
     mState = kActing;
     
     for (i = 0; i < mIlk->mStartingEquipment.count (); i++) {
-        char *str = mIlk->mStartingEquipment.get (i);
+        const char *str = mIlk->mStartingEquipment.get (i);
 
         if ('|' == str[0]) { /* the or symbol indicates don't try to create 
                                 the object unless the previous obj failed */
@@ -373,7 +401,7 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         do_and = 1;
         addObjectToInventory (obj);
         if (!mWeapon && obj->isA (kWeapon)) {
-            gainRank (((shWeaponIlk *) obj->mIlk) -> mSkill);
+            gainRank (((shWeaponIlk *) obj->mIlk) -> mSkill, 1 + mBAB / 4);
             ++gotweapon;
             /* don't wield until hero is in sight so he can see message */
             //wield (obj, 1); 
@@ -382,13 +410,12 @@ shMonster::shMonster (shMonsterIlk *ilk, int extralevels /* = 0 */ )
         }
     }
 
-    if (!gotweapon || !RNG (4)) {
-        gainRank (kUnarmedCombat);
+    if (!gotweapon) {
+        gainRank (kUnarmedCombat, 1 + mBAB / 4);
     }
 
     /* maybe monster gets some more treasure */
-    
-    if (isA ("alien egg") || isA ("facehugger") || isA ("tribble")) {
+    if (noTreasure ()) {
         /* no treasure */
     } else {
         if (RNG (50) <= 5 + mCLevel) {
@@ -450,7 +477,7 @@ pickAMonsterIlk (int level)
 
 
 shMonsterIlk *
-findAMonsterIlk (char *name)
+findAMonsterIlk (const char *name)
 {
     int i;
     shMonsterIlk *ilk;
@@ -482,50 +509,54 @@ generateMonster (int level)
 }
 
 
-char *
-shMonster::the (char *buff, int len)
+const char *
+shMonster::the ()
 {
+    char *buf = GetBuf ();
+
     if (!Hero.canSee (this)) {
-        snprintf (buff, len, 
-                  hasMind () ? "someone" : "something");
+        strncpy (buf, hasMind () ? "someone" : "something", SHBUFLEN);
     } else {
-        snprintf (buff, len, "the %s", mIlk->mName);
+        snprintf (buf, SHBUFLEN, "the %s", mIlk->mName);
     }
-    return buff;
+    return buf;
 }
 
-char *
-shMonster::an (char *buff, int len)
+const char *
+shMonster::an ()
 {
+    char *buf = GetBuf ();
+
     if (!Hero.canSee (this)) {
-        snprintf (buff, len, 
-                  hasMind () ? "someone" : "something");
+        strncpy (buf, hasMind () ? "someone" : "something", SHBUFLEN);
+    } else if (isUnique ()) {
+        return the ();
     } else {
-        snprintf (buff, len, 
+        snprintf (buf, SHBUFLEN, 
                   isvowel (mIlk->mName[0]) ? "an %s" : "a %s", 
                   mIlk->mName);
     }
-    return buff;
+    return buf;
 }
 
-char *
-shMonster::your (char *buff, int len)
+const char *
+shMonster::your ()
 {
+    char *buf = GetBuf ();
+
     if (Hero.isBlind ()) {
-        snprintf (buff, len, 
-                  hasMind () ? "someone" : "something");
+        strncpy (buf, hasMind () ? "someone" : "something", SHBUFLEN);
     } else {
-        snprintf (buff, len, "your %s", mIlk->mName);
+        snprintf (buf, SHBUFLEN, "your %s", mIlk->mName);
     }
-    return buff;
+    return buf;
 }
 
 
-char *
-shMonster::getDescription (char *buff, int len)
+const char *
+shMonster::getDescription ()
 {
-    snprintf (buff, len, "%s", mIlk->mName);
-    return buff;
+    return mIlk->mName;
 }
 
 
@@ -536,7 +567,7 @@ shMonster::numHands ()
 }
 
 int
-shMonster::die (shCauseOfDeath how, char *killer)
+shMonster::die (shCauseOfDeath how, const char *killer)
 {
     return shCreature::die (how, killer);
 }
@@ -645,6 +676,7 @@ shMonsterIlk::spoilers ()
 
 
             attack += m->mBAB;
+            attack += m->mToHitModifier;
             damage += NDX (atk->mDamage[0].mNumDice,
                            atk->mDamage[0].mDieSides);
             if (acfoo > 22) { /* spot hero +2 agi bonus */

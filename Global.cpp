@@ -8,5 +8,4 @@ shObjectIlk MoneyIlk;
 shVector <shMonsterIlk *> MonsterIlks;
 shObject *TheNothingObject = (shObject *) 0x22;
 shObjectIlk WreckIlk;
-
-
+shObjectIlk EnergyCellIlk;

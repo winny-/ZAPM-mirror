@@ -13,81 +13,83 @@ initializeRayGuns ()
     int n = 0;
 
     GenericRayGun =
-    new shRayGunIlk ("ray gun", "ray gun", RayGunData[n].mColor,
+    new shRayGunIlk ("ray gun", "ray gun", RayGunData[n].mColor, 0, 
                      shAttack::kNoAttack, kNoEnergy, 6, 1,
                      200, 0);
 
     new shRayGunIlk ("empty ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor,
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kNoAttack, kNoEnergy, 6, 1,
                      200, 10);
     n++;
 
     new shRayGunIlk ("freeze ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kFreezeRay, kFreezing, 4, 8,
                      800, 10);
     n++;
 
     new shRayGunIlk ("disintegration ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kDisintegrationRay, kDisintegrating, 4, 8,
                      2000, 1);
     n++;
 
     new shRayGunIlk ("heat ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kHeatRay, kBurning, 4, 8,
                      800, 15);
     n++;
 
     new shRayGunIlk ("gauss ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kGaussRay, kMagnetic, 4, 8,
                      800, 12);
     n++;
 
     new shRayGunIlk ("poison ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kPoisonRay, kPoisonous, 1, 4,
                      800, 12);
     n++;
 
     new shRayGunIlk ("gamma ray gun", 
                      RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     shObject::kRadioactive,
                      shAttack::kGammaRay, kRadiological, 4, 8,
                      800, 10);
     n++;
 
     new shRayGunIlk ("stasis ray gun",
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kStasisRay, kParalyzing, 1, 6,
                      800, 5);
     n++;
 
     new shRayGunIlk ("transporter ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kTransporterRay, kTransporting, 4, 8,
                      800, 15);
     n++;
 
     new shRayGunIlk ("healing ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kHealingRay, kHealing, 4, 8,
                      800, 5);
     n++;
 
     new shRayGunIlk ("restoration ray gun", 
-                     RayGunData[n].mDesc, RayGunData[n].mColor, 
+                     RayGunData[n].mDesc, RayGunData[n].mColor, 0,
                      shAttack::kRestorationRay, kRestoring, 4, 8,
                      800, 5);
     n++;
 }
 
 //constructor:
-shRayGunIlk::shRayGunIlk (char *name, 
-                          char *appearance,
+shRayGunIlk::shRayGunIlk (const char *name, 
+                          const char *appearance,
                           shColor color,
+                          int flags,
                           shAttack::Type atktype,
                           shEnergyType entype,
                           int numdice,
@@ -105,7 +107,7 @@ shRayGunIlk::shRayGunIlk (char *name,
     mGlyph.mChar = ObjectGlyphs[mType].mChar | ColorMap[color];
     mCost = cost;
     mMaterial = kSteel;
-    mFlags = kAimed | kChargeable;
+    mFlags = flags | kAimed | kChargeable;
     mProbability = prob;
     mWeight = 500;
     mSize = kMedium;
@@ -142,6 +144,7 @@ createRayGun (char *desc /* = NULL */,
     raygun->mIlk = ilk;
     raygun->mCount = 1;
     raygun->mHP = ilk->mHP;
+    raygun->mFlags = ilk->mFlags & 0xffffff00;
 
     if (-2 == bugginess) {
         int tmp = RNG (8);
@@ -158,13 +161,13 @@ createRayGun (char *desc /* = NULL */,
 }
 
 
-static char *
-getRayGunColor (shObject *raygun)
+char *
+shObjectIlk::getRayGunColor ()
 {
     static char buf[40];
     char *p;
 
-    strcpy (buf, raygun->mIlk->mAppearance);
+    strcpy (buf, mAppearance);
     for (p = &buf[0]; ' ' != *p; ++p);
     *p = 0;
     return &buf[0];
@@ -225,7 +228,7 @@ loadRayGun (shObject *gun)
         return FULLTURN;
     }
     gun->mCharges = NDX (2, 6);
-    I->p ("The light on the ray gun is %s now.", getRayGunColor (gun));
+    I->p ("The light on the ray gun is %s now.", gun->mIlk->getRayGunColor ());
 
     if (can->isIlkKnown ()) {
         gun->setIlkKnown ();

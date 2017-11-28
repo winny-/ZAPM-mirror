@@ -2,6 +2,7 @@
 #include "Util.h"
 #include "Object.h"
 #include "Creature.h"
+#include <math.h>
 shVector <shObjectIlk *> WeaponIlks;
 //shVector <shWeaponIlk *> WeaponsGroupedByType[kMaxWeaponType];
 
@@ -10,37 +11,62 @@ initializeWeapons ()
 {
     ImprovisedMissileAttack.mRange = 5; 
 
-    new shWeaponIlk ("knife", "knife", "sharp knife", 
+    new shWeaponIlk ("elven dagger", "dagger", "wooden dagger", 
                      kCyan, kMeleeWeapon, NULL, kSteel,
-                     kIdentified | kMelee | kMissile, 400, kTiny, 10, 1, 
+                     kMelee | kMissile, 400, kTiny, 10, 1, 
                      NULL, 0, 0,
                      shAttack::kStab, shAttack::kSingle, 10, 0, kPiercing, 
                      1, 4, FULLTURN, 
-                     kNoEnergy, 0, 10, 5);
+                     kNoEnergy, 0, 10 BZ, 5);
     
-    new shWeaponIlk ("anal probe", "probe", "terrifying probe", 
+    new shWeaponIlk ("anal probe", "anal probe", "anal probe", 
                      kGray, kMeleeWeapon, NULL, kSteel,
                      kIdentified | kMelee, 400, kTiny, 10, 1, 
                      NULL, 0, 0,
                      shAttack::kAnalProbe, shAttack::kSingle, 10, 0, kViolating, 
                      10, 10, FULLTURN, 
-                     kNoEnergy, 0, 10, 0);
+                     kNoEnergy, 0, 10 BZ, 0);
     
-    new shWeaponIlk ("club", "heavy stick", "heavy stick", 
+    new shWeaponIlk ("club", "club", "club", 
                      kBrown, kMeleeWeapon, NULL, kWood,
                      kIdentified | kMelee, 1200, kSmall, 5, 10, 
                      NULL, 0, 0,
                      shAttack::kClub, shAttack::kSingle, 0, 0, kConcussive, 
                      1, 6, FULLTURN, 
-                     kNoEnergy, 0, 1, 5);
+                     kNoEnergy, 0, 1 BZ, 5);
 
-    new shWeaponIlk ("tazer", "tazer", "tazer", 
-                     kGray, kMeleeWeapon, NULL, kPlastic,
+    new shWeaponIlk ("cattle prod", "cattle prod", "cattle prod", 
+                     kGray, kMeleeWeapon, NULL, kSteel,
                      kMelee, 400, kSmall, 10, 2,
-                     EnergyCell, 5, 0,
+                     &EnergyCellIlk, 5, 0,
                      shAttack::kZap, shAttack::kSingle, 0, 0, kElectrical,
+                     1, 4, FULLTURN, 
+                     kStunning, 1, 50 BZ, 5);
+
+    new shWeaponIlk ("mop", "mop", "mop",
+                     kBrightGreen, kMeleeWeapon, NULL, kWood, 
+                     kIdentified | kMelee, 900, kMedium, 5, 10, 
+                     NULL, 0, 0,
+                     shAttack::kSmash, shAttack::kSingle, 0, 0, kConcussive,
                      1, 8, FULLTURN, 
-                     kNoEnergy, 0, 50, 10);
+                     kNoEnergy, 0, 5 BZ, 5); 
+
+    new shWeaponIlk ("pair of nunchucks", "pair of nunchucks", 
+                     "pair of nunchucks",
+                     kYellow, kMeleeWeapon, NULL, kWood,
+                     kIdentified | kMelee, 500, kMedium, 10, 10, 
+                     NULL, 0, 0,
+                     shAttack::kClub, shAttack::kSingle, 0, 0, kConcussive,
+                     2, 4, FULLTURN,
+                     kNoEnergy, 0, 200 BZ, 10);
+
+    new shWeaponIlk ("chainsaw", "chainsaw", "chainsaw",
+                     kBrightYellow, kMeleeWeapon, NULL, kSteel, 
+                     kIdentified | kMelee, 1200, kMedium, 10, 10, 
+                     &EnergyCellIlk, 0, -2,
+                     shAttack::kCut, shAttack::kSingle, 0, 0, kSlashing,
+                     2, 6, FULLTURN, 
+                     kNoEnergy, 0, 500 BZ, 5); 
 
     new shWeaponIlk ("katana", "sword", "antique sword", 
                      kGray, kSword, NULL, kSteel,
@@ -48,147 +74,170 @@ initializeWeapons ()
                      NULL, 0, 0,
                      shAttack::kSword, shAttack::kSingle, 0, 0, kSlashing,
                      1, 10, FULLTURN, 
-                     kNoEnergy, 0, 1000, 10);
+                     kNoEnergy, 0, 1000 BZ, 10);
 
-    new shWeaponIlk ("batleth", "batleth", "batleth",
+    new shWeaponIlk ("bat'leth", "bat'leth", "bat'leth",
                      kGray, kMeleeWeapon, NULL, kSteel,
                      kMelee, 1000, kLarge, 20, 2, 
                      NULL, 0, -1,
                      shAttack::kSlash, shAttack::kSingle, 0, 0, kSlashing,
                      2, 6, FULLTURN,
-                     kNoEnergy, 0, 1000, 10);
+                     kNoEnergy, 0, 1200 BZ, 10);
 
     shWeaponIlk *lightsaber = 
     new shWeaponIlk ("light saber", "energy sword", "energy sword", 
                      kRed, kSword, NULL, kTitanium,
                      kMelee, 600, kMedium, 30, 2,
                      NULL, 1, 1,
-                     shAttack::kSlash, shAttack::kSingle, 0, 0, kSlashing,
-                     2, 8, FULLTURN, 
-                     kBurning, 1, 1000, 10);
-    lightsaber->mInUseIntrinsics |= kReflection;
+                     shAttack::kSlash, shAttack::kSingle, 0, 0, 
+                     kSlashing, 2, 6, FULLTURN, 
+                     kBurning, 1, 
+                     1500 BZ, 10);
+    lightsaber->mWieldedIntrinsics |= kReflection;
+
 
     shWeaponIlk *grenade =
-    new shWeaponIlk ("concussion grenade", "grenade", "grenade", 
+    new shWeaponIlk ("grenade", "grenade", "grenade", 
                      kCyan, kGrenade, NULL, kSteel,
                      kMissile | kMergeable | kTouchAttack, 300, kTiny, 5, 1, 
                      NULL, 0, 0,
                      shAttack::kBlast, shAttack::kBurst, 10, 1, kConcussive, 
                      3, 6, FULLTURN, 
-                     kNoEnergy, 0, 25, 100);
+                     kNoEnergy, 0, 25 BZ, 0);
 
-
-    new shWeaponIlk ("frag grenade", "grenade", "grenade", 
+    new shWeaponIlk ("concussion grenade", "grenade", "grenade", 
                      kCyan, kGrenade, grenade, kSteel,
                      kMissile | kMergeable | kTouchAttack, 300, kTiny, 5, 1, 
                      NULL, 0, 0,
                      shAttack::kBlast, shAttack::kBurst, 10, 1, kConcussive, 
+                     3, 6, FULLTURN, 
+                     kNoEnergy, 0, 25 BZ, 100);
+
+
+    new shWeaponIlk ("frag grenade", "grenade", "grenade", 
+                     kCyan, kGrenade, grenade, kSteel,
+                     kMissile | kMergeable | kTouchAttack, 400, kTiny, 5, 1, 
+                     NULL, 0, 0,
+                     shAttack::kBlast, shAttack::kBurst, 10, 1, kConcussive, 
                      2, 6, FULLTURN, 
-                     kPiercing, 2, 25, 50);
+                     kPiercing, 2, 25 BZ, 50);
 
     new shWeaponIlk ("stun grenade", "grenade", "grenade",
                      kCyan, kGrenade, grenade, kSteel,
-                     kMissile | kMergeable | kTouchAttack, 300, kTiny, 5, 1, 
+                     kMissile | kMergeable | kTouchAttack, 400, kTiny, 5, 1, 
                      NULL, 0, 0,
                      shAttack::kBlast, shAttack::kBurst, 10, 1, kStunning, 
                      3, 6, FULLTURN, 
-                     kNoEnergy, 0, 25, 50);
+                     kNoEnergy, 0, 25 BZ, 50);
 
     new shWeaponIlk ("rad grenade", "grenade", "grenade",
                      kCyan, kGrenade, grenade, kSteel,
-                     kMissile | kMergeable | kTouchAttack, 300, kTiny, 5, 1, 
+                     kMissile | kMergeable | kTouchAttack, 400, kTiny, 5, 1, 
                      NULL, 0, 0,
                      shAttack::kFlash, shAttack::kBurst, 10, 3, kRadiological, 
                      4, 8, FULLTURN, 
                      kNoEnergy, 0, 25, 25);
 
+    new shWeaponIlk ("football", "grenade", "prolate spheroid",
+                     kBrown, kGrenade, NULL, kLeather,
+                     kMissile, 400, kSmall, 3, 1,
+                     NULL, 0, 0,
+                     shAttack::kImpact, shAttack::kSingle, 10, 9, kConcussive, 
+                     1, 6, FULLTURN,
+                     kNoEnergy, 0, 25 BZ, 5);
 
     shWeaponIlk *shell =
     new shWeaponIlk ("shotgun shell", "shotgun shell", "shotgun shell", 
                      kYellow, kNoSkillCode, NULL, kLead,
-                     kAmmo | kMergeable, 20, kFine, 1, 1, NULL, 0, 0,
+                     kAmmo | kMergeable, 32, kFine, 1, 1, NULL, 0, 0,
                      shAttack::kShot, shAttack::kSingle, 0, 0,
-                     kConcussive, 2, 6, FULLTURN,
-                     kNoEnergy, 0, 1, 80);
+                     kConcussive, 4, 6, FULLTURN,
+                     kNoEnergy, 0, 1 BZ, 80);
         
     shWeaponIlk *bullet =
     new shWeaponIlk ("bullet", "bullet", "bullet", kYellow, kNoSkillCode, NULL, kSteel,
                      kAmmo | kMergeable, 10, kFine, 1, 1, NULL, 0, 0,
                      shAttack::kBullet, shAttack::kSingle, 0, 0,
                      kPiercing, 1, 8, FULLTURN,
-                     kNoEnergy, 0, 1, 300);
+                     kNoEnergy, 0, 1 BZ, 300);
 
     shWeaponIlk *rail =
     new shWeaponIlk ("railgun slug", "slug", "slug", 
                      kRed, kNoSkillCode, NULL, kDepletedUranium,
-                     kAmmo | kMergeable, 10, kFine, 1, 1, NULL, 0, 0,
+                     kAmmo | kMergeable, 100, kFine, 1, 1, NULL, 0, 0,
                      shAttack::kRail, shAttack::kSingle, 0, 0,
                      kPiercing, 3, 10, FULLTURN,
-                     kNoEnergy, 0, 1, 25);
+                     kNoEnergy, 0, 1 BZ, 25);
 
-    new shWeaponIlk ("pea shooter", "pistol", "wimpy pistol", 
+    new shWeaponIlk ("pea shooter", "energy pistol", "wimpy pistol", 
                      kCyan, kHandgun, NULL, kSteel,
                      kAimed, 800, kMedium, 10, 2, NULL, 0, 0,
                      shAttack::kBolt, shAttack::kSingle, 30, 0,
-                     kConcussive, 1, 4, FULLTURN,
-                     kNoEnergy, 0, 50, 50);
+                     kForce, 1, 4, FULLTURN,
+                     kNoEnergy, 0, 50 BZ, 50);
 
-    new shWeaponIlk ("laser pistol", "pistol", "silver pistol", 
+    new shWeaponIlk ("laser pistol", "energy pistol", "laser pistol", 
                      kCyan, kHandgun, NULL, kSteel,
-                     kAimed | kIdentified , 800, kMedium, 10, 2, EnergyCell, 5, -1,
-                     shAttack::kLaser, shAttack::kSingle, 30, 0, 
+                     kAimed | kIdentified , 800, kMedium, 10, 2, &EnergyCellIlk, 5, -1,
+                     shAttack::kLaser, shAttack::kBeam, 30, 0, 
                      kLaser, 1, 8, FULLTURN,
-                     kBlinding, 1, 100, 25);
+                     kBlinding, 2, 50 BZ, 25);
 
-    /* nearly the same weapon as the laser pistol, built for storm troopers :-) */
-    new shWeaponIlk ("blaster", "pistol", "silver pistol", 
+    new shWeaponIlk ("blaster", "energy pistol", "blaster", 
                      kCyan, kHandgun, NULL, kSteel,
-                     kAimed | kIdentified, 800, kMedium, 10, 2, EnergyCell, 5, -2,
+                     kAimed | kIdentified, 800, kMedium, 10, 2, &EnergyCellIlk, 5, -2,
                      shAttack::kBolt, shAttack::kSingle, 30, 0, 
                      kForce, 1, 8, FULLTURN,
-                     kNoEnergy, 0, 100, 25);
+                     kNoEnergy, 0, 50 BZ, 25);
 
-    new shWeaponIlk ("phaser", "pistol", "ergonomic pistol", 
+    new shWeaponIlk ("phaser", "energy pistol", "ergonomic energy pistol", 
                      kCyan, kHandgun, NULL, kSteel,
-                     kAimed | kIdentified, 800, kMedium, 10, 2, EnergyCell, 5, 1,
-                     shAttack::kLaser, shAttack::kSingle, 30, 0, 
+                     kAimed | kIdentified, 800, kMedium, 10, 2, &EnergyCellIlk, 5, 1,
+                     shAttack::kLaser, shAttack::kBeam, 30, 0, 
                      kLaser, 1, 8, FULLTURN,
-                     kBlinding, 1, 100, 15);
+                     kBlinding, 2, 50 BZ, 15);
 
-    new shWeaponIlk ("laser rifle", "rifle", "silver rifle", 
+    new shWeaponIlk ("laser rifle", "laser rifle", "laser rifle", 
                      kCyan, kLightGun, NULL, kSteel,
-                     kAimed | kIdentified, 1200, kLarge, 10, 3, EnergyCell, 8, 1,
-                     shAttack::kLaser, shAttack::kSingle, 60, 0,
+                     kAimed | kIdentified, 1200, kLarge, 10, 3, &EnergyCellIlk, 8, 1,
+                     shAttack::kLaser, shAttack::kBeam, 60, 0,
                      kLaser, 1, 12, FULLTURN,
-                     kBlinding, 1, 200, 75);
+                     kBlinding, 3, 200 BZ, 75);
 
     new shWeaponIlk ("pistol", "pistol", "pistol", 
                      kBlue, kHandgun, NULL, kSteel,
                      kAimed, 800, kMedium, 10, 2, bullet, 1, -1,
                      shAttack::kBullet, shAttack::kSingle, 60, 0,
                      kPiercing, 1, 8, FULLTURN,
-                     kNoEnergy, 0, 100, 35);
+                     kNoEnergy, 0, 100 BZ, 25);
+
+    new shWeaponIlk ("assault pistol", "pistol", "assault pistol",
+                     kBlue, kHandgun, NULL, kSteel,
+                     kAimed, 800, kMedium, 10, 2, bullet, 2, -1,
+                     shAttack::kBullet, shAttack::kSingle, 60, 0,
+                     kPiercing, 1, 8, FULLTURN,
+                     kNoEnergy, 0, 100 BZ, 10);
 
     new shWeaponIlk ("shotgun", "shotgun", "shotgun", 
                      kBlue, kLightGun, NULL, kSteel,
-                     kAimed, 1200, kLarge, 10, 3, shell, 1, 4,
-                     shAttack::kShot, shAttack::kSingle, 15, 0,
-                     kConcussive, 2, 6, FULLTURN,
-                     kNoEnergy, 0, 150, 25);
+                     kAimed, 1200, kLarge, 10, 3, shell, 1, 1,
+                     shAttack::kShot, shAttack::kSingle, 10, 0,
+                     kConcussive, 4, 6, FULLTURN,
+                     kNoEnergy, 0, 150 BZ, 25);
 
     new shWeaponIlk ("sniper rifle", "rifle", "telescoped rifle", 
                      kBlue, kLightGun, NULL, kSteel,
                      kAimed, 1200, kMedium, 10, 2, bullet, 1, 3,
                      shAttack::kBullet, shAttack::kSingle, 180, 0,
                      kPiercing, 1, 10, FULLTURN,
-                     kNoEnergy, 0, 300, 25);
+                     kNoEnergy, 0, 300 BZ, 25);
 
     new shWeaponIlk ("pulse rifle", "rifle", "assault rifle", 
                      kBlue, kHeavyGun, NULL, kSteel,
                      kAimed | kSelectiveFire, 3000, kLarge, 10, 3, bullet, 3, 0, 
                      shAttack::kBullet, shAttack::kSingle, 60, 0, 
                      kPiercing, 1, 8, FULLTURN,
-                     kNoEnergy, 0, 400, 25);
+                     kNoEnergy, 0, 400 BZ, 20);
 
 /*
     new shWeaponIlk ("boltgun", "pistol", "assault pistol",
@@ -200,29 +249,29 @@ initializeWeapons ()
 */
     new shWeaponIlk ("railgun", "railgun", "railgun",
                      kRed, kHeavyGun, NULL, kSteel,
-                     kIdentified | kAimed, 1000, kMedium, 10, 3, rail, 1, 0,
+                     kIdentified | kAimed, 2000, kMedium, 10, 3, rail, 1, 0,
                      shAttack::kRail, shAttack::kSingle, 180, 0,
                      kPiercing, 3, 10, SLOWTURN,
-                     kNoEnergy, 0, 800, 15);
+                     kNoEnergy, 0, 800 BZ, 15);
 
 
     new shWeaponIlk ("chaingun", "heavy cannon", "heavy cannon", 
                      kYellow, kHeavyGun, NULL, kSteel,
-                     kIdentified | kAimed, 6000, kLarge, 15, 5, bullet, 6, 0,
+                     kIdentified | kAimed, 3000, kLarge, 15, 5, bullet, 6, 0,
                      shAttack::kBullet, shAttack::kSingle, 60, 0,
                      kPiercing, 1, 10, FULLTURN,
-                     kNoEnergy, 0, 800, 10);
+                     kNoEnergy, 0, 800 BZ, 10);
 
-    new shWeaponIlk ("laser cannon", "heavy cannon", "silver cannon", 
+    new shWeaponIlk ("laser cannon", "laser cannon", "laser cannon", 
                      kCyan, kHeavyGun, NULL, kSteel,
-                     kAimed, 6000, kLarge, 15, 5, EnergyCell, 35, 1,
-                     shAttack::kLaser, shAttack::kSingle, 60, 0,
+                     kAimed, 3000, kLarge, 15, 5, &EnergyCellIlk, 35, 1,
+                     shAttack::kLaser, shAttack::kBeam, 60, 0,
                      kLaser, 4, 12, FULLTURN,
-                     kBlinding, 1, 800, 10);
+                     kBlinding, 1, 800 BZ, 10);
 /*
     new shWeaponIlk ("plasma cannon", "heavy cannon", "heavy cannon", 
                      kBlue, NULL, kSteel,
-                     kAimed, 5000, kLarge, 15, 5, EnergyCell, 40, 0,
+                     kAimed, 5000, kLarge, 15, 5, &EnergyCellIlk, 40, 0,
                      shAttack::kZap, shAttack::kBeam, 0, 6,
                      kBurning, 4, 10, 0, 2000, 2000,
                      kNoEnergy, 0, 800, 10);
@@ -242,9 +291,9 @@ initializeWeapons ()
 
 
 
-shWeaponIlk::shWeaponIlk (char *name, 
-                          char *vaguename,
-                          char *appearance, 
+shWeaponIlk::shWeaponIlk (const char *name, 
+                          const char *vaguename,
+                          const char *appearance, 
                           shColor color,
                           shSkillCode skill,
                           shWeaponIlk *parent,
@@ -355,7 +404,7 @@ shCreature::hasAmmo (shObject *weapon)
         return 1;
     }
     n = ilk->mAmmoBurst;
-    if (EnergyCell == ammo) {
+    if (&EnergyCellIlk == ammo) {
         return countEnergy () >= n ? 1 : 0;
     }
     for (i = 0; n > 0 && i < mInventory->count (); i++) {
@@ -399,7 +448,7 @@ shCreature::expendAmmo (shObject *weapon, int cnt /* = 0 */ )
     } else if (NULL == ammo) {
         return -1;
     }
-    if (EnergyCell == ammo) {
+    if (&EnergyCellIlk == ammo) {
         if (countEnergy () >= cnt) {
             loseEnergy (cnt);
             return 1;
@@ -458,7 +507,12 @@ createWeapon (char *desc /* = NULL */,
 
     if (weapon->isA (kProjectile)) {
         weapon->identify ();
-        weapon->mCount = -22 == count ? NDX (5, 10) : count;
+        if (-22 != count) {
+            weapon->mCount = count;
+        } else {
+            int dice = (int) (18.0 / (double) sqrt ((double) ilk->mWeight));
+            weapon->mCount = NDX (dice, 10);
+        }
     } else if (weapon->getIlkFlag (kMissile)) {
         weapon->mCount = -22 == count ? RNG (1, 4) : count;
     } else {

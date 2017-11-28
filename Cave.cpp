@@ -41,7 +41,7 @@ shMapLevel::buildCaveRoom (int x1, int y1, int size)
         }
 
         if (!isFloor (x, y)) {
-            SETSQ (x, y, kStoneFloor);
+            SETSQ (x, y, kCavernFloor);
             ++n;
         } else if (!RNG (3)) {
             continue;
@@ -84,11 +84,11 @@ shMapLevel::buildCaveTunnel (int x1, int y1, int x2, int y2)
         dir = RNG (3) ? vectorDirection (x, y, x2, y2) : dirs[RNG(4)];
         
         if (moveForward (dir, &x, &y)) {
-            SETSQ (x, y, kStoneFloor);
+            SETSQ (x, y, kCavernFloor);
             x1 = x;
             y1 = y;
             if (isInBounds (x+1, y)) {
-                SETSQ (x+1, y, kStoneFloor);
+                SETSQ (x+1, y, kCavernFloor);
             }
         } else {
             x = x1;
@@ -107,7 +107,7 @@ shMapLevel::buildCave ()
     int i;
     int j;
     int x, y;
-    int lighting = RNG (3) ? 0 : 1;
+    int lighting = RNG (3) ? -1 : 1;
     int radioactive = RNG (mDLevel) > 5; 
 
     mMapType = kRadiationCave;
@@ -149,9 +149,9 @@ shMapLevel::buildCave ()
                 {
                     SETSQ (x, y, kCaveWall);
                 }
-                setLit (x, y, lighting);
+                setLit (x, y, lighting, lighting, lighting, lighting);
             } else {
-                setLit (x, y, lighting);
+                setLit (x, y, lighting, lighting, lighting, lighting);
                 mSquares[x][y].mRoomId = 0;
                 if (x == 0 || x == mColumns - 1 ||
                     y == 0 || y == mRows - 1)
@@ -184,7 +184,7 @@ shMapLevel::buildCave ()
         }
     }
 
-    for (i = 0; i < 14; i++) {
+    for (i = 0; i < 8; i++) {
         findUnoccupiedSquare (&x, &y);
         putObject (generateObject (mDLevel), x, y);
     }

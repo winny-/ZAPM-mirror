@@ -5,17 +5,17 @@
 
 shVector <shObjectIlk *> ImplantIlks;
 
-char *
+const char *
 describeImplantSite (shImplantIlk::Site site)
 {
     switch (site) {
     case shImplantIlk::kFrontalLobe: return "frontal lobe";
-    case shImplantIlk::kLeftTemporalLobe: return "left temporal lobe";
-    case shImplantIlk::kRightTemporalLobe: return "right temporal lobe";
-    case shImplantIlk::kLeftParietalLobe: return "left parietal lobe";
-    case shImplantIlk::kRightParietalLobe: return "right parietal lobe";
+    case shImplantIlk::kTemporalLobe: return "temporal lobe";
+    case shImplantIlk::kParietalLobe: return "parietal lobe";
     case shImplantIlk::kOccipitalLobe: return "occipital lobe";
+    case shImplantIlk::kCerebellum: return "cerebellum";
     case shImplantIlk::kLeftEar: return "left ear";
+    case shImplantIlk::kRightEyeball: return "right eyeball";
     default:
         return "brain";
     }
@@ -112,8 +112,8 @@ initializeImplants ()
 
 
 //constructor:
-shImplantIlk::shImplantIlk (char *name, char *vaguename, 
-                            char *appearance, 
+shImplantIlk::shImplantIlk (const char *name, const char *vaguename, 
+                            const char *appearance, 
                             shColor color, 
                             shMaterialType material, int flags, 
                             Site site, int intrinsics,
@@ -135,7 +135,7 @@ shImplantIlk::shImplantIlk (char *name, char *vaguename,
     mHardness = 5;
     mHP = 1;
     mSite = site;
-    mInUseIntrinsics |= intrinsics;
+    mWornIntrinsics |= intrinsics;
     mPsiModifier = psimodifier;
 }
 

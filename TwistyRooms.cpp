@@ -21,7 +21,7 @@ shMapLevel::isClear (int x1, int y1, int x2, int y2)
             if (y < 0 || y >= mRows) {
                 continue;
             }
-            if (kStoneFloor == GETSQ (x, y)) {
+            if (kFloor == GETSQ (x, y)) {
                 return 0;
             }
         }
@@ -94,11 +94,11 @@ shMapLevel::buildTwistyCorridor (int x, int y, shDirection d)
             return cnt;
         }
 //      if ((0 == i)
-        if (kStoneFloor == GETSQ (nx, ny)) {
+        if (kFloor == GETSQ (nx, ny)) {
             return cnt;
         }
 
-        SETSQ (nx, ny, kStoneFloor);
+        SETSQ (nx, ny, kFloor);
         SETSQFLAG (nx, ny, kHallway);
 /*
         if (isHorizontal (d)) {
@@ -168,7 +168,7 @@ shMapLevel::fiveByFiveClearance (int x, int y)
 
     for (i = x; i < x + 5; i++) {
         for (j = y; j < mRows; j++) {
-            if (kStoneFloor == GETSQ (i, j)) {
+            if (kFloor == GETSQ (i, j)) {
                 if (j < y + 4) {
                     return 0;
                 }
@@ -232,7 +232,7 @@ shMapLevel::buildRoomOrElRoom (int sx, int sy, int ey)
 
     for (x = sx + 1; x < ex -1; x++) {
         for (y = sy + 1; y < ey -1; y++) {
-            SETSQ (x, y, kStoneFloor);
+            SETSQ (x, y, kFloor);
             if (ra) {
                 SETSQFLAG (x, y, kRadioactive);
             }
@@ -261,10 +261,10 @@ shMapLevel::buildRoomOrElRoom (int sx, int sy, int ey)
         if (RNG (2)) {
             x = RNG (sx + 1, ex - 2);
             y = RNG (2) ? sy : ey -1;
-            if (TESTSQ (x, y - 1, kStoneFloor) &&
-                TESTSQ (x, y + 1, kStoneFloor))
+            if (TESTSQ (x, y - 1, kFloor) &&
+                TESTSQ (x, y + 1, kFloor))
             {
-                SETSQ (x, y, kStoneFloor);
+                SETSQ (x, y, kFloor);
                 addDoor (x, y, 0 == RNG (4), 0 == RNG (5), -1);
                 ++ndoors;
             }
@@ -272,10 +272,10 @@ shMapLevel::buildRoomOrElRoom (int sx, int sy, int ey)
         else {
             y = RNG (sy + 1, ey - 1);
             x = RNG (2) ? sx : ex - 1;
-            if (TESTSQ (x - 1, y, kStoneFloor) &&
-                TESTSQ (x + 1, y, kStoneFloor))
+            if (TESTSQ (x - 1, y, kFloor) &&
+                TESTSQ (x + 1, y, kFloor))
             {
-                SETSQ (x, y, kStoneFloor);
+                SETSQ (x, y, kFloor);
                 addDoor (x, y, 0 == RNG (4), 0 == RNG (5), -1);
                 ++ndoors;
             }
@@ -363,7 +363,7 @@ shMapLevel::buildTwistyRooms ()
         do {
             x = RNG (mColumns); 
             y = RNG (mRows);
-        } while (!TESTSQ (x, y, kStoneFloor));
+        } while (!TESTSQ (x, y, kFloor));
         n += buildTwistyCorridor (x, y, (shDirection) (2 * RNG (4)));
         if (n > 4 * (mRows + mColumns)) break;
     }
@@ -377,7 +377,7 @@ shMapLevel::buildTwistyRooms ()
         do {
             x = RNG (mColumns); 
             y = RNG (mRows);
-        } while (!TESTSQ (x, y, kStoneFloor)  ||
+        } while (!TESTSQ (x, y, kFloor)  ||
                  isObstacle (x, y));
         putObject (generateObject (), x, y);
     }

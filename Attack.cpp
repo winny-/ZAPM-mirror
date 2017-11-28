@@ -5,7 +5,7 @@
 #include "Creature.h"
 #include "Object.h"
 
-static char *AttackNouns[shAttack::kMaxAttackType] =
+static const char *AttackNouns[shAttack::kMaxAttackType] =
 { 
     "nothing",
     "bite",
@@ -15,14 +15,14 @@ static char *AttackNouns[shAttack::kMaxAttackType] =
     "claw",
     "club",
     "kick",
-    "laser",
+    "laser beam",
     "quill",
     "slash",
     "stab",
     "zap"
 };
 
-static char *SecondPersonAttackVerbs[shAttack::kMaxAttackType] =
+static const char *SecondPersonAttackVerbs[shAttack::kMaxAttackType] =
 {
     "don't attack",
     "bite",
@@ -71,7 +71,7 @@ shAttack::noun ()
     case kBullet: return "bullet";
     case kBolt: return "bolt";
     case kBreatheBugs: return "cloud of bugs";
-    case kBreatheFire: return "fireball";
+    case kBreatheFire: return "fiery breath";
     case kBreatheTime: return "time warp";
     case kBreatheTraffic: return "packet storm";
     case kBreatheViruses: return "cloud of viruses";
@@ -80,7 +80,9 @@ shAttack::noun ()
     case kChoke: return "choke";
     case kCook: return "cooker"; /* ugh */
     case kCrush: return "grasp";
+    case kCut: return "cut";
     case kDisintegrationRay: return "disintegration ray";
+    case kExplode: return "explosion";
     case kExtractBrain: return "extraction";
     case kFaceHug: return "grasp";
     case kFlash: return "flash";
@@ -91,6 +93,7 @@ shAttack::noun ()
     case kHealingRay: return "healing ray";
     case kHeatRay: return "heat ray";
     case kKick: return "kick";
+    case kLightningBolt: return "lightning bolt";
     case kLaser: return "laser beam";
     case kMentalBlast: return "mental blast";
     case kPoisonRay: return "poison ray";
@@ -150,15 +153,26 @@ shAttack ImprovisedMissileAttack =
     shAttack (NULL, shAttack::kNoAttack, shAttack::kSingle, kMissile, 
               kNoEnergy, 1, 2);
 
+shAttack KickedFootballAttack =
+    shAttack (NULL, shAttack::kNoAttack, shAttack::kSingle, kMissile,
+              kNoEnergy, 1, 6);
+
 shAttack GroundCollisionAttack =
     shAttack (NULL, shAttack::kSmash, shAttack::kOther, kMissile,
               kConcussive, 1, 6);
 
 shAttack PitTrapDamage =
-    shAttack (NULL, shAttack::kSmash, shAttack::kSingle, 0, kConcussive, 1, 6);
+    shAttack (NULL, shAttack::kSmash, shAttack::kSingle, 0, 
+              kConcussive, 1, 6);
 
 shAttack AcidPitTrapDamage =
-    shAttack (NULL, shAttack::kAcidBath, shAttack::kSingle, 0, kCorrosive, 1, 4);
+    shAttack (NULL, shAttack::kAcidBath, shAttack::kSingle, 0, 
+              kCorrosive, 1, 4);
 
 shAttack AcidBloodAttack = 
-    shAttack (NULL, shAttack::kAcidSplash, shAttack::kSingle, 0, kCorrosive, 2, 6);
+    shAttack (NULL, shAttack::kAcidSplash, shAttack::kSingle, 0, 
+              kCorrosive, 2, 6);
+
+shAttack ExplodingMonsterAttack =
+    shAttack (NULL, shAttack::kBlast, shAttack::kBurst, 0,
+              kConcussive, 3, 6);

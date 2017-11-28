@@ -29,7 +29,7 @@ abortion ()
     if (kDead != Hero.mState && 
         Hero.getStoryFlag ("impregnation")) 
     {
-        I->p ("The parasitic alien inside you dies.");
+        I->p ("The parasitic alien inside you is killed!");
         Hero.setStoryFlag ("impregnation", 0);
     }
 }
@@ -88,7 +88,12 @@ int
 quaffBeer (shObject *can)
 {
     can->setIlkKnown ();
-    I->p ("Mmmmm... beer!");
+    if (Hero.isFrightened ()) {
+        Hero.resetFrightened ();
+        I->p ("Liquid courage!");
+    } else {
+        I->p ("Mmmmm... beer!");
+    }
     Hero.makeConfused (NDX (2, 50) * 1000);
     return FULLTURN;
 }
@@ -182,62 +187,106 @@ quaffWater (shObject *can)
 
 
 int
+shCreature::healing (int hpmaxdice)
+{
+    int id = 0;
+    if (isHero () && mHP < mMaxHP) {
+        I->p ("Your wounds are rapidly healing!");
+        id++;
+    }
+    if (isHero () && Hero.getStoryFlag ("brain incision")) {
+        Hero.resetStoryFlag ("brain incision");
+        I->p ("Your head wound is closed.");
+        id++;
+    }
+    mHP += NDX (4, 8);
+    if (mHP > mMaxHP) {
+        mMaxHP += NDX (hpmaxdice, 3);
+        mHP = mMaxHP;
+        if (isHero () && hpmaxdice) {
+            I->p ("You feel much healthier.");
+            id++;
+        }
+    } 
+    if (isSickened () && !sewerSmells ()) {
+        resetSickened ();
+        id++;
+    }
+    if (isViolated ()) {
+        resetViolated ();
+        id++;
+    }
+    if (isConfused ()) {
+        resetConfused ();
+        id++;
+    }
+    if (isStunned ()) {
+        resetStunned ();
+        id++;
+    }
+    checkTimeOuts ();
+    return id;
+}
+
+
+int
 quaffHealing (shObject *can)
 {
-    can->setIlkKnown ();
-    if (Hero.mHP < Hero.mMaxHP) {
-        I->p ("Your wounds are rapidly healing!");
-    }
-    Hero.mHP += NDX (4, 8);
-    if (Hero.mHP > Hero.mMaxHP) {
-        Hero.mMaxHP += NDX (1, 3);
-        Hero.mHP = Hero.mMaxHP;
-        I->p ("You feel much healthier.");
-    } 
-    /*
-    if (can->isOptimized ()) {
-        abortion ();
-    }
-    */
-    if (Hero.isViolated ()) {
-        Hero.resetViolated ();
-    }
-    if (Hero.isConfused ()) {
-        Hero.resetConfused ();
-    }
-    if (Hero.isStunned ()) {
-        Hero.resetStunned ();
-    }
-    Hero.checkTimeOuts ();
+    if (Hero.healing (1))
+        can->setIlkKnown ();
     return FULLTURN;
 }
 
 
 int
-quaffFullHealing (shObject *can)
+shCreature::fullHealing (int hpmaxdice)
 {
-    can->setIlkKnown ();
-    if (Hero.mHP < Hero.mMaxHP) {
+    int id = 0;
+    if (isHero () && mHP < mMaxHP) {
         I->p ("Your wounds are fully healed!");
+        id++;
     }
-    Hero.mHP += NDX (4, 8);
-    if (Hero.mHP > Hero.mMaxHP) {
-        Hero.mMaxHP += NDX (2, 6);
-        Hero.mHP = Hero.mMaxHP;
-        I->p ("You feel much healthier.");
+    if (isHero () && Hero.getStoryFlag ("brain incision")) {
+        Hero.resetStoryFlag ("brain incision");
+        I->p ("Your head wound is closed.");
+        id++;
+    }
+    mHP += NDX (4, 8);
+    if (mHP > mMaxHP) {
+        mMaxHP += NDX (hpmaxdice, 6);
+        mHP = mMaxHP;
+        if (isHero () && hpmaxdice) {
+            I->p ("You feel much healthier.");
+            id++;
+        }
     } 
-    Hero.mHP = Hero.mMaxHP;
-    /* abortion (); */
-    if (Hero.isViolated ()) {
-        Hero.resetViolated ();
+    mHP = mMaxHP;
+    if (isSickened ()) {
+        resetSickened ();
+        id++;
     }
-    if (Hero.isConfused ()) {
-        Hero.resetConfused ();
+    if (isViolated ()) {
+        resetViolated ();
+        id++;
     }
-    if (Hero.isStunned ()) {
-        Hero.resetStunned ();
+    if (isConfused ()) {
+        resetConfused ();
+        id++;
     }
-    Hero.checkTimeOuts ();
+    if (isStunned ()) {
+        resetStunned ();
+        id++;
+    }
+    checkTimeOuts ();
+    return id;
+}
+
+
+int
+quaffFullHealing (shObject *can)
+{    
+    if (Hero.fullHealing (2))
+        can->setIlkKnown ();
     return FULLTURN;
 }
 
@@ -250,6 +299,23 @@ quaffRestoration (shObject *can)
     } else {
         can->maybeName ();
     }
+    return FULLTURN;
+}
+
+
+int
+quaffBrain (shObject *can)
+{
+    can->setIlkKnown ();
+
+    I->p ("Brain food!");
+    if (!can->isBuggy () && Hero.mMaxAbil.mInt < 25) {
+        ++Hero.mMaxAbil.mInt;
+    }
+    if (Hero.mAbil.mInt < Hero.mMaxAbil.mInt) {
+        ++Hero.mAbil.mInt;
+    }
+    Hero.computeIntrinsics ();
     return FULLTURN;
 }
 
@@ -296,7 +362,7 @@ quaffGainAbility (shObject *can)
             case kInt: I->p ("You're already as smart you can get!"); break;
             case kWis: I->p ("You're already as wise as you can get!"); break;
             case kCha: 
-                I->p ("You're already as charimsmatic as you can get!"); break;
+                I->p ("You're already as charismatic as you can get!"); break;
             }
         }
     }
@@ -315,7 +381,11 @@ quaffRadAway (shObject *can)
             Hero.mRad = 0;
         }
     }
-    I->p ("You feel purified.");
+    if (!Hero.mRad)
+        I->p ("You feel purified.");
+    else 
+        I->p ("You feel less contaminated.");
+
     can->maybeName ();
     return FULLTURN;
 }
@@ -325,7 +395,7 @@ int
 quaffSpeed (shObject *can)
 {
     int numdice = 12;
-    if (can->isOptimized ()) { /* small permanent gain in speed */
+    if (can->isOptimized ()) { 
         numdice = 20;
     } else if (can->isBuggy ()) {
         numdice = 4;
@@ -416,15 +486,16 @@ initializeCanisters ()
     GenericCanister = 
       new shCanisterIlk ("canister", "canister", 0, NULL, NULL, NULL, 0, 0);
 
+
     new shCanisterIlk ("canister of beer", CanisterData[n++].mDesc, 0,
                        NULL, &quaffBeer, NULL, 5, 100);
     new shCanisterIlk ("canister of super glue", CanisterData[n++].mDesc, 0,
                        &makeRepair, &quaffSuperGlue, NULL, 5, 50);
     new shCanisterIlk ("canister of nano cola", CanisterData[n++].mDesc, 0,
                        NULL, &quaffNanoCola, NULL, 5, 100);
-
     new shCanisterIlk ("canister of water", "clear canister", 0,
-                       NULL, &quaffWater, NULL, 5, 40);
+                       NULL, &quaffWater, NULL, 5, 5);
+
 
     /* no doozies in the 50 buckazoid category */
     new shCanisterIlk ("canister of Rad-Away", CanisterData[n++].mDesc, 0,
@@ -432,33 +503,42 @@ initializeCanisters ()
     new shCanisterIlk ("canister of restoration", CanisterData[n++].mDesc, 0,
                        NULL, &quaffRestoration, NULL, 50, 50);
     new shCanisterIlk ("canister of healing", CanisterData[n++].mDesc, 0,
-                       NULL, &quaffHealing, NULL, 50, 150);
+                       NULL, &quaffHealing, NULL, 50, 125);
 
 
-    new shCanisterIlk ("canister of liquid nitrogen", CanisterData[n++].mDesc, 0,
+    new shCanisterIlk ("canister of liquid nitrogen", 
+                       CanisterData[n++].mDesc, 0,  
                        NULL, &quaffLNO, NULL, 75, 50);
     new shCanisterIlk ("canister of napalm", CanisterData[n++].mDesc, 0,
                        NULL, &quaffNapalm, NULL, 75, 50);
 
-    new shCanisterIlk ("canister of universal solvent", CanisterData[n++].mDesc, 0,
+
+    new shCanisterIlk ("canister of universal solvent", 
+                       CanisterData[n++].mDesc, 0,
                        &useUniversalSolvent, &quaffUniversalSolvent, 
                        NULL, 100, 25);
     new shCanisterIlk ("canister of speed", CanisterData[n++].mDesc, 0,
-                       NULL, &quaffSpeed, NULL, 100, 75);
+                       NULL, &quaffSpeed, NULL, 100, 50);
     new shCanisterIlk ("canister of poison", CanisterData[n++].mDesc, 0,
-                       NULL, &quaffPoison, NULL, 50, 50);
+                       NULL, &quaffPoison, NULL, 100, 50);
     new shCanisterIlk ("canister of plasma", CanisterData[n++].mDesc, 0, 
-                       NULL, &quaffPlasma, NULL, 50, 50);
+                       NULL, &quaffPlasma, NULL, 100, 50);
     
 
-    new shCanisterIlk ("canister of mutagen", CanisterData[n++].mDesc, 0,
-                       NULL, &quaffMutagen, NULL, 200, 25);
+    new shCanisterIlk ("canister of mutagen", CanisterData[n++].mDesc, 
+                       shObject::kRadioactive,
+                       NULL, &quaffMutagen, NULL, 200, 50);
     new shCanisterIlk ("canister of full healing", CanisterData[n++].mDesc, 
                        0, NULL, &quaffFullHealing, NULL, 200, 50);
     new shCanisterIlk ("canister of gain ability", CanisterData[n++].mDesc, 0,
                        NULL, &quaffGainAbility, NULL, 200, 50);
     new shCanisterIlk ("canister of spice", CanisterData[n++].mDesc, 0,
                        NULL, &quaffSpice, NULL, 200, 50);
+
+
+    new shCanisterIlk ("brain cylinder", "brain in a jar", kIdentified,
+                       NULL, &quaffBrain, NULL,
+                       1000, 10);
 
     new shCanisterIlk ("canister of antimatter", CanisterData[n++].mDesc, 0,
                        NULL, &quaffAntimatter, NULL,
@@ -467,8 +547,8 @@ initializeCanisters ()
 }
 
 
-shCanisterIlk::shCanisterIlk (char *name, 
-                              char *appearance, 
+shCanisterIlk::shCanisterIlk (const char *name, 
+                              const char *appearance, 
                               int flags,
                               shCanisterUseFunc *usefunc,
                               shCanisterFunc *quafffunc,
@@ -561,6 +641,7 @@ createCanister (char *desc,
     }
 
     canister->mIlk = ilk;
+    canister->mFlags = ilk->mFlags & 0xffffff00;
     canister->mCount = count;
     canister->setBugginess (bugginess);
     canister->mHP = ilk->mHP;

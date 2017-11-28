@@ -38,13 +38,13 @@ shSkill::getName ()
     case kOpenLock: return "Pick Locks";
     case kRepair: return "Repair";
 
-    case kGrenade: return "Grenade Weapons";
+    case kGrenade: return "Thrown Weapons";
     case kHandgun: return "Handguns";
     case kLightGun: return "Light Guns";
     case kHeavyGun: return "Heavy Guns";
 
     case kSearch: return "Search";
-    case kHacking: return "Hack";
+    case kHacking: return "Programming";
     
     case kListen: return "Listen";
     case kSpot: return "Spot";
@@ -81,7 +81,7 @@ compareSkills (shSkill **a, shSkill **b)
 void
 shSkill::getDesc (char *buf, int len)
 {
-    const char *abil;
+    const char *abil = NULL;
 
     if (kMutantPower == mCode) {
         abil = "Cha";
@@ -98,12 +98,13 @@ shSkill::getDesc (char *buf, int len)
     }
 
     snprintf (buf, len, "%s (%s)                          ", getName (), abil);
-    snprintf (&buf[28], len-28, "%d      ", mRanks);
+    snprintf (&buf[28], len-28, "%d (%d)      ", mRanks,
+              mAccess*(Hero.mCLevel+1)/4);
 }
 
 
 void
-shHero::editSkills (int points)
+shHero::editSkills ()
 {
     char prompt[50];
     int i;
@@ -116,11 +117,12 @@ shHero::editSkills (int points)
 //    mSkills.sort (&compareSkills);
 
     do {
-        if (points > 1) {
-            snprintf (prompt, 50, "Choose %d skills to advance:", points);
+        if (mSkillPoints > 1) {
+            snprintf (prompt, 50, "You may make %d skill advancements:", 
+                      mSkillPoints);
             flags |= shMenu::kMultiPick;
-        } else if (1 == points) {
-            snprintf (prompt, 50, "Choose a skill to advance:");
+        } else if (1 == mSkillPoints) {
+            snprintf (prompt, 50, "You may advance a skill:");
             flags |= shMenu::kMultiPick;
         } else {
             snprintf (prompt, 50, "Skills");
@@ -131,7 +133,7 @@ shHero::editSkills (int points)
         char letter = 'a';
 
 #if 0
-        if (points) {
+        if (mSkillPoints) {
             menu.addHeader ("       Skill                     Ranks");
         } else {
             menu.addHeader ("Skill                    Ranks");
@@ -157,24 +159,30 @@ shHero::editSkills (int points)
             
             lastcode = skill->mCode;
 
-            if (points && skill->mAccess*(mCLevel+1)/4 > skill->mRanks) {
+            if (mSkillPoints && 
+                skill->mAccess*(mCLevel+1)/4 > skill->mRanks) 
+            {
                 menu.addItem (letter++, buf, skill);
                 navail++;
             } else {
                 menu.addItem (0, buf, skill);
             }
         }
-        if (points && !navail) { 
+        if (mSkillPoints && !navail) { 
             return;
         }
+        int advanced = 0;
         do {
-            i = menu.getResult ((void **) &skill, NULL);
+            i = menu.getResult ((const void **) &skill, NULL);
             if (skill) {
-                --points;
+                --mSkillPoints;
                 skill->mRanks++;
+                advanced++;
             }
-        } while (i && points);
-    } while (points);
+        } while (i && mSkillPoints);
+        if (!advanced) 
+            return;
+    } while (mSkillPoints);
 
 }
 

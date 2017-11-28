@@ -10,8 +10,11 @@ extern "C" {
 #include <stdarg.h>
 #include <ctype.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <unistd.h>
-
+#endif
 
 #include "Util.h"
 #include "Map.h"
@@ -27,22 +30,30 @@ int ColorMap[22];
 shInterface::shInterface ()
 {
     int i;
+    int x, y;
+    WINDOW *win;
 
-    initscr ();
+    win = initscr ();
+
+    if (!win) {
+        fprintf (stderr, "Sorry, curses support is required.\n");
+        exitZapm (-1);
+    }
 
     if (!has_colors ()) {
         endwin ();
         fprintf (stderr, "Sorry, color support is required.\n");
-        exit (-1);
+        exitZapm (-1);
     }
     start_color ();
 
     for (i = 1; i < COLOR_PAIRS; i++) {
-        init_pair (i, i, COLOR_BLACK);
+        init_pair (i, i %8, i/8);
     }
 
 
-#ifdef DJGPP
+#ifdef _WIN32
+    curs_set (2); /* use block cursor */
     ColorMap[kBlack] = COLOR_BLACK;
     ColorMap[kRed] = COLOR_PAIR (4) | A_BOLD;
     ColorMap[kGreen] = COLOR_PAIR (2) | A_BOLD;
@@ -68,7 +79,6 @@ shInterface::shInterface ()
     ColorMap[kDarkGray] = COLOR_PAIR (7) | A_DIM;
 
 #else
-
     ColorMap[kBlack] = COLOR_BLACK;
     ColorMap[kRed] = COLOR_PAIR (1);
     ColorMap[kGreen] = COLOR_PAIR (2);
@@ -84,7 +94,8 @@ shInterface::shInterface ()
     ColorMap[kBrightMagenta] = COLOR_PAIR (5) | A_BOLD;
     ColorMap[kBrightCyan] = COLOR_PAIR (6) | A_BOLD;
     ColorMap[kWhite] = COLOR_PAIR (7) | A_BOLD;
-    
+
+    /* A_DIM doesn't seem to do much, but... */
     ColorMap[kDarkRed] = COLOR_PAIR (1) | A_DIM;
     ColorMap[kDarkGreen] = COLOR_PAIR (2) | A_DIM;
     ColorMap[kBrown] = COLOR_PAIR (3) | A_DIM;
@@ -92,6 +103,14 @@ shInterface::shInterface ()
     ColorMap[kDarkMagenta] = COLOR_PAIR (5) | A_DIM;
     ColorMap[kDarkCyan] = COLOR_PAIR (6) | A_DIM;
     ColorMap[kDarkGray] = COLOR_PAIR (7) | A_DIM;
+
+    
+
+
+
+
+
+
 #endif
 
     mColor = kGray;
@@ -117,6 +136,11 @@ shInterface::shInterface ()
     new_panel (mSideWin);
     mLogWin = newwin (5, 80, 20, 0);
     if (!mLogWin) goto toosmall;
+    mDiagWin = NULL;
+    if (GodMode) {
+        mDiagWin = newwin (10, 80, 25, 0);
+        scrollok (mDiagWin, TRUE);
+    }
     notimeout (mLogWin, TRUE);
     mLogSize = 5;
     mLogRow = 0;
@@ -124,6 +148,8 @@ shInterface::shInterface ()
     mHistoryWrapped = 0;
     mDirty = 0;
     mNoNewline = 0;
+    mLogSCount = 0;
+    mPause = 0;
 
     mX0 = 0;
     mY0 = 0;
@@ -144,19 +170,22 @@ shInterface::shInterface ()
     if (!mDbgFile) {
         endwin ();
         fprintf (stderr, "Sorry, couldn't open %s\n", dbgfilename);
-        exit (-1);
+        exitZapm (-1);
     }
     setlinebuf (mDbgFile);
 #endif
 
-    debug ("%d color pairs are available.", COLOR_PAIRS);
+    debug ("COLORS: %d", COLORS);
+    debug ("COLOR_PAIRS: %d", COLOR_PAIRS);
+    debug ("can change: %d", can_change_color());
+
     return;
 
 toosmall:
     endwin ();
     fprintf (stderr, "Sorry, but a terminal with dimensions of at least 80x25"
              " is required.\n");
-    exit (-1);
+    exitZapm (-1);
 }
 
 shInterface::~shInterface ()
@@ -206,6 +235,15 @@ shInterface::crazyIvan (int on)
             MAPKEY ('u', kMoveSW);
             MAPKEY ('l', kMoveW);
 
+            MAPKEY ('N', kGlideNW);
+            MAPKEY ('J', kGlideN);
+            MAPKEY ('B', kGlideNE);
+            MAPKEY ('H', kGlideE);
+            MAPKEY ('Y', kGlideSE);
+            MAPKEY ('K', kGlideS);
+            MAPKEY ('U', kGlideSW);
+            MAPKEY ('L', kGlideW);
+
 #ifdef CTRLFIRE
             MAPKEY (CTRL('n'), kFireNW);
             MAPKEY (CTRL('j'), kFireN);
@@ -215,6 +253,8 @@ shInterface::crazyIvan (int on)
             MAPKEY (CTRL('k'), kFireS);
             MAPKEY (CTRL('u'), kFireSW);
             MAPKEY (CTRL('l'), kFireW);
+#else
+            MAPKEY (CTRL('N'), kName);
 #endif
         } else {
             MAPKEY ('n', kNoCommand);
@@ -226,6 +266,17 @@ shInterface::crazyIvan (int on)
             MAPKEY ('k', kKick);
             MAPKEY ('l', kNoCommand);
 
+            MAPKEY ('N', kName);
+            MAPKEY ('J', kNoCommand);
+            MAPKEY ('B', kNoCommand);
+            MAPKEY ('H', kHistory);
+            MAPKEY ('Y', kNoCommand);
+            MAPKEY ('K', kNoCommand);
+            MAPKEY ('U', kUninstall);
+            MAPKEY ('L', kNoCommand);
+
+
+
 #ifdef CTRLFIRE
             MAPKEY (CTRL('n'), kNoCommand);
             MAPKEY (CTRL('j'), kNoCommand);
@@ -235,6 +286,8 @@ shInterface::crazyIvan (int on)
             MAPKEY (CTRL('u'), kNoCommand);
             MAPKEY (CTRL('k'), kNoCommand);
             MAPKEY (CTRL('l'), kNoCommand);
+#else
+            MAPKEY (CTRL('N'), kName);
 #endif
         }
         MAPKEY ('<', kMoveDown);
@@ -269,6 +322,15 @@ shInterface::crazyIvan (int on)
             MAPKEY ('b', kMoveSW);
             MAPKEY ('h', kMoveW);
 
+            MAPKEY ('Y', kGlideNW);
+            MAPKEY ('K', kGlideN);
+            MAPKEY ('U', kGlideNE);
+            MAPKEY ('L', kGlideE);
+            MAPKEY ('N', kGlideSE);
+            MAPKEY ('J', kGlideS);
+            MAPKEY ('B', kGlideSW);
+            MAPKEY ('H', kGlideW);
+
 #ifdef CTRLFIRE
             MAPKEY (CTRL('y'), kFireNW);
             MAPKEY (CTRL('k'), kFireN);
@@ -288,6 +350,15 @@ shInterface::crazyIvan (int on)
             MAPKEY ('j', kNoCommand);
             MAPKEY ('b', kNoCommand);
             MAPKEY ('h', kNoCommand);
+
+            MAPKEY ('Y', kNoCommand);
+            MAPKEY ('K', kNoCommand);
+            MAPKEY ('U', kUninstall);
+            MAPKEY ('L', kNoCommand);
+            MAPKEY ('N', kName);
+            MAPKEY ('J', kNoCommand);
+            MAPKEY ('B', kNoCommand);
+            MAPKEY ('H', kHistory);
 
 #ifdef CTRLFIRE
             MAPKEY (CTRL('y'), kNoCommand);
@@ -339,7 +410,7 @@ shInterface::initializeCommands ()
         endwin ();
         fprintf (stderr, 
                  "Sorry, I can't find movement keys in your terminal!\n");
-        exit (-1);
+        exitZapm (-1);
     }
 
     MAPKEY (KEY_UP, kMoveN);
@@ -353,9 +424,16 @@ shInterface::initializeCommands ()
     MAPKEY (KEY_C3, kMoveSE);
 #endif
 
+    MAPKEY ('@', kToggleAutopickup);
     MAPKEY (',', kPickup);
     MAPKEY (':', kLookHere);
     MAPKEY ('/', kLookThere);
+
+
+    MAPKEY ('[', kShowArmor);
+    MAPKEY ('+', kShowImplants);
+    MAPKEY (')', kShowWeapons);
+    
 
 /* It's best to follow the familiar key bindings of Nethack and other 
    roguelikes and to map frequently used key to the left side of the 
@@ -384,11 +462,12 @@ shInterface::initializeCommands ()
     MAPKEY ('A', kAdjust) 
     MAPKEY ('D', kDropMany);
     MAPKEY ('E', kEditSkills);
-    MAPKEY ('H', kHistory);
+    //MAPKEY ('H', kHistory);
     MAPKEY ('I', kInstall);
     MAPKEY ('K', kKick);
     MAPKEY ('N', kName);
     MAPKEY ('O', kEditOptions);
+    MAPKEY ('R', kUninstall);
     MAPKEY ('S', kSaveGame);
     MAPKEY ('T', kTakeOff);
     MAPKEY ('U', kUninstall);
@@ -396,7 +475,7 @@ shInterface::initializeCommands ()
     MAPKEY ('W', kWear);
     MAPKEY ('Z', kMutantPower);
 
-
+    MAPKEY (CTRL('N'), kName);
     MAPKEY (CTRL('P'), kHistory);
     MAPKEY (CTRL('Q'), kQuit);
     MAPKEY (CTRL('D'), kKick);
@@ -442,14 +521,18 @@ shInterface::initializeCommands ()
     mCommandHelp[kRest] = "Rest for one second";
     mCommandHelp[kSaveGame] = "Save your game (and exit Zapm)";
     mCommandHelp[kSearch] = "Search for traps and secret doors";
+    mCommandHelp[kShowArmor] = "List worn armor";
+    mCommandHelp[kShowImplants] = "List installed bionic implants";
+    mCommandHelp[kShowWeapons] = "Show wielded weapon";
     mCommandHelp[kTakeOff] = "Take off armor";
     mCommandHelp[kThrow] = "Throw an item";
-    mCommandHelp[kUninstall] = "Uninstall a bionic implant";
+    mCommandHelp[kToggleAutopickup] = "Toggle Autopickup option";
+    mCommandHelp[kUninstall] = "Remove / Uninstall a bionic implant";
     mCommandHelp[kUse] = "Activate or apply a tool";
     mCommandHelp[kVersion] = "Version and Copyright information";
     mCommandHelp[kWear] = "Wear armor";
     mCommandHelp[kWield] = "Wield a weapon";
-    mCommandHelp[kQuit] = "Quit the game";
+    mCommandHelp[kQuit] = "Quit the game (without saving)";
     mCommandHelp[kZapRayGun] = "Zap a ray gun";
         
     mCommandHelp[kGodMode] = "God Mode Commands";
@@ -473,7 +556,7 @@ shInterface::getCommand ()
 
 
 void
-shInterface::pauseXY (int x, int y)
+shInterface::pauseXY (int x, int y, int ms /* = 0 */)
 {
     int ch;
 #ifndef DJGPP
@@ -481,14 +564,38 @@ shInterface::pauseXY (int x, int y)
 #endif
     char more[] = "  --More--";
         
-    waddstr (mLogWin, more);
-    drawLog ();
+    if (ms) {
+        drawScreen ();
+    } else {
+        char morebuf[16];
+        strncpy (morebuf, more, sizeof(morebuf));
+		waddstr (mLogWin, morebuf);
+        drawLog ();
+    }
     cursorOnXY (x, y);
-    do {
-        ch = getChar ();
-    } while (' ' != ch && 13 != ch && 27 != ch);
+    if (ms) {
+#ifdef _WIN32
+        Sleep (ms);
+#else
+        usleep (ms * 1000);
+#endif
+    } else {
+        do {
+            ch = getChar ();
+        } while (' ' != ch && 13 != ch && 27 != ch);
+    }
     Level->drawSq (x, y);
-    pageLog ();
+    if (!ms) {
+        if (Flags.mFadeLog) {
+            int x, y;
+            getyx (mLogWin, y, x);
+            mvwaddstr (mLogWin, y, x - strlen (more), "          ");
+            wmove (mLogWin, y, x);
+//        drawLog ();
+        }
+        mLogSCount = 0;
+        pageLog ();
+    }
 }
 
 
@@ -496,7 +603,8 @@ shInterface::pauseXY (int x, int y)
   returns: 1 on success, 0 on abort
 */
 int
-shInterface::getSquare (char *prompt, int *x, int *y, int maxradius)
+shInterface::getSquare (const char *prompt, int *x, int *y, int maxradius, 
+                        int instant)
 {
     int key;
     int tx, ty;
@@ -530,7 +638,9 @@ shInterface::getSquare (char *prompt, int *x, int *y, int maxradius)
             return 0;
         default:
             I->p ("Use the movement keys to position the cursor.");
-            I->p ("Select the location with the \".\" key.  Press Escape to abort.");
+            I->p ("Select the location with the \".\" key.  "
+                  "Press Escape to abort.");
+            continue;
         }
         if (Level->isInBounds (tx, ty) && 
             distance (&Hero, tx, ty) <= 5 * maxradius)
@@ -538,6 +648,8 @@ shInterface::getSquare (char *prompt, int *x, int *y, int maxradius)
             *x = tx; 
             *y = ty;
         }       
+        if (instant)
+            return 1;
     }
 }
 
@@ -572,11 +684,12 @@ shInterface::getDirection (int *x, int *y, int *z, int silent)
 
 
 int
-shInterface::getChar ()
+shInterface::getChar (WINDOW *window /* = NULL */)
 {
-    int c = wgetch (mMainWin);
-//    debug ("wgetch() -> %d", c);
-    return c;
+    if (!window) {
+        window = mMainWin;
+    }
+    return  wgetch (window);
 }
 
 
@@ -585,24 +698,33 @@ shInterface::getChar ()
 
 int
 shInterface::getStr (char *buf, int len,
-                     const char *prompt, ...)
+                     const char *prompt,
+                     const char *dflt /* = NULL */ )
 {
     /* can't use wgetnstr b/c it won't pass us ^C */
     
     char msg[80];
     int pos = 0;
+    int savehistidx = mHistoryIdx;
 
     snprintf (msg, 80, "%s ", prompt);    
     msg[79] = 0;
     p (msg);
     buf[0] = 0;
-    mNoNewline = 1;
+    //mNoNewline = 1;
+
+    if (dflt) {
+        strncpy (buf, dflt, len);
+        buf[len-1] = 0;
+        waddstr (mLogWin, buf);
+        pos = strlen (buf);
+    }
 
     wtimeout (mLogWin, 100);
 
     while (1) {
         drawLog ();
-        int c = getChar ();
+        int c = getChar (mLogWin);
         if (isprint (c)) {
             if (pos >= len - 1) {
                 continue;
@@ -614,6 +736,10 @@ shInterface::getStr (char *buf, int len,
         } else if (8 == c && pos) {
             pos--;
             waddch (mLogWin, 8);
+#ifdef _WIN32
+            waddch (mLogWin, ' ');
+            waddch (mLogWin, 8);
+#endif
         } else if (127 == c && pos) {
         backspace:
             pos--;
@@ -624,7 +750,7 @@ shInterface::getStr (char *buf, int len,
             /* FIXME */
             
             debug ("escape sequence?");
-            int c2 = getChar ();
+            int c2 = getChar (mLogWin);
             
             if ('[' != c2) {
                 debug ("just plain escape, bail out");
@@ -632,7 +758,7 @@ shInterface::getStr (char *buf, int len,
                 break;
             }
             
-            c2 = getChar ();
+            c2 = getChar (mLogWin);
             if ('D' == c2 && pos) {
                 goto backspace;
             }
@@ -643,8 +769,13 @@ shInterface::getStr (char *buf, int len,
     }
     
     wtimeout (mLogWin, -1);
+    //waddch (mLogWin,'\n');
 
     buf[pos] = 0;
+    snprintf (msg, 80, "%s %s", prompt, buf);
+    msg[79] = 0;
+    strcpy (&mLogHistory[savehistidx*80], msg);
+
     return pos;
 }
 
@@ -664,7 +795,7 @@ shInterface::yn (const char *prompt, ...)
     va_end (ap);
     
     while (1) {
-        res = getChar ();
+        res = getChar (mLogWin);
         if ('y' == res || 'Y' == res) {
             return 1;
         } else if ('n' == res || 'N' == res) {
@@ -684,7 +815,8 @@ shInterface::dirty ()
 void
 shInterface::pause ()
 {
-    mPause = 1;
+    doMorePrompt ();
+    //mPause = 1;
 }
 
 
@@ -711,7 +843,7 @@ void
 shInterface::doMorePrompt ()
 {
     int ch;
-#ifndef DJGPP
+#ifndef _WIN32
     const 
 #endif
     char more[] = "  --More--";
@@ -719,18 +851,20 @@ shInterface::doMorePrompt ()
     waddstr (mLogWin, more);
     drawLog ();
     do {
-        ch = getChar ();
+        ch = getChar (mLogWin);
     } while (' ' != ch && 13 != ch && 27 != ch);
+
     if (2 != mPause) {
         mLogSCount = 0;
         pageLog ();
     }
     mPause = 0;
-#if 0 /* this makes it hard to tell which lines came before the --More-- */
-    int x, y;
-    getyx (mLogWin, y, x);
-    wmove (mLogWin, y, x - strlen (more));
-#endif
+    if (Flags.mFadeLog) {
+        int x, y;
+        getyx (mLogWin, y, x);
+        mvwaddstr (mLogWin, y, x - strlen (more), "          ");
+        drawLog ();
+    }
     return;
 }
 
@@ -748,10 +882,12 @@ shInterface::vp (const char *format, va_list ap)
     }
    
     res = vsnprintf (&strbuf[0], buflen, format, ap);
-    if (' ' != strbuf[1] && '-' != strbuf[2]) {
+    if (' ' != strbuf[1] || '-' != strbuf[2]) {
         strbuf[0] = toupper (strbuf[0]);
     }
-
+    if ('"' == strbuf[0]) {
+        strbuf[1] = toupper (strbuf[1]);
+    }
     strbuf[buflen-1] = 0;
     strcpy (&mLogHistory[mHistoryIdx*80], strbuf);
     debug ("%s", strbuf);
@@ -792,6 +928,14 @@ shInterface::diag (const char *format, ...)
 #else
     char dbgbuf[100];
     res = vsnprintf (dbgbuf, 100, format, ap);
+    if (mDiagWin) {
+        wattrset (mDiagWin, ColorMap[kCyan]);
+        waddstr (mDiagWin, dbgbuf);
+        waddch (mDiagWin, '\n');
+        touchwin (mDiagWin);
+        wnoutrefresh (mDiagWin);
+        doupdate ();
+    }
     debug ("%s", dbgbuf);
 #endif
     va_end (ap);
@@ -806,11 +950,29 @@ shInterface::diag (const char *format, ...)
 void
 shInterface::pageLog () 
 {
-    werase (mLogWin);
-    wmove (mLogWin, 0, 0);
-    mLogRow = 0;
-    mLogSCount = 0;
-    drawLog ();
+    if (Flags.mFadeLog) {
+        int i;
+        int offs;
+        int x, y;
+        getyx (mLogWin, y, x);
+
+        wattrset (mLogWin, ColorMap[kBlue]);
+
+        for (i = 0; i < mLogRow; i++) {
+            offs = (HISTORY_ROWS + mHistoryIdx - (mLogRow-i)) % HISTORY_ROWS;
+            mvwaddstr (mLogWin, i, 0, &mLogHistory[offs*80]);
+        }
+
+        wattrset (mLogWin, A_NORMAL);
+        wmove (mLogWin, y, x);
+        drawLog ();
+    } else {
+        werase (mLogWin);
+        wmove (mLogWin, 0, 0);
+        mLogRow = 0;
+        mLogSCount = 0;
+        drawLog ();
+    }
 }
 
 
@@ -843,7 +1005,7 @@ shInterface::showHistory ()
 
     update_panels ();
     doupdate ();
-    I->getChar ();
+    I->getChar (win);
     hide_panel (panel);
     del_panel (panel);
     delwin (win);
@@ -865,54 +1027,59 @@ initGlyph (shGlyph *g, char sym, shColor color, int extra)
 struct shMenuChoice
 {
     char mLetter;
-    int mCount;     /* count available. -1 indicates this is a header */
-    int mSelected;  /* count currently selected */
-    char mText[70];
-    void *mValue;   /* value of the object returned later if this choice
-                       is selected. */
+    int mCount;           /* count available. -1 indicates this is a header */
+    int mSelected;        /* count currently selected */
+    char mText[256];
+    const void *mValue;   /* value of the object returned later if this choice
+                             is selected. */
     
-    shMenuChoice (char letter, char *text, void *value, int count)
+    shMenuChoice (char letter, const char *text, const void *value, int count, 
+                  int selected = 0)
     {
         mLetter = letter;
-        strncpy (mText, text, 69); mText[69] = 0;
+        strncpy (mText, text, 255); mText[255] = 0;
         mValue = value;
-        mSelected = 0;
+        mSelected = selected;
         mCount = count;
     }   
 };
 
 
-shMenu::shMenu (char *prompt, int flags)
+shMenu::shMenu (const char *prompt, int flags)
     : mChoices ()
 {
     strncpy (mPrompt, prompt, 79); mPrompt[79] = 0;
     mFlags = flags;
-    mFirstReady = 0;
+    //mFirstReady = 0;
     mResultIterator = 0;
     mPanel = NULL;
-    mWidth = 20;
     mHeight = 0;
+    mOffset = 0;
+    mDone = 0;
+    getmaxyx(stdscr, mHeight, mWidth);
+
+    if (!(mFlags & kNoPick)) {
+        /* KLUDGE: avoid repeating a letter on the same page */
+        mHeight = mini (52, mHeight); 
+    }
     mObjTypeHack = kMaxObjectType;
 }
 
 
 shMenu::~shMenu ()
 {
-
+    for (int i = 0; i < mChoices.count (); i++) {
+        delete mChoices.get (i);
+    }
 }
 
 
 void
-shMenu::addItem (char letter, char *text, void *value, int count /* = 1 */)
+shMenu::addItem (char letter, const char *text, const void *value, 
+                 int count /* = 1 */, int selected /* = 0 */)
 {
     shMenuChoice *c;
-    int w;
     
-    if (++mHeight > 22) {
-        accumulateResults (1);
-        mWidth = 20;
-        mHeight = 1;
-    }    
     if (0 == letter) {
         letter = ' ';
     }
@@ -931,26 +1098,20 @@ shMenu::addItem (char letter, char *text, void *value, int count /* = 1 */)
             case kProjectile: addHeader ("Ammunition"); break;
             case kFood: addHeader ("Comestibles"); break;
             case kDevice: addHeader ("Devices"); break;
+            case kEnergyCell: addHeader ("Energy Cells"); break;
             default: addHeader ("------");
             }
             mObjTypeHack = t;
         }
     }
 
-    c = new shMenuChoice (letter, text, value, count);
+    c = new shMenuChoice (letter, text, value, count, selected);
     mChoices.add (c);
-    w = strlen (text);
-    if (w > 70) {
-        w = 70;
-    }
-    if (w > mWidth) {
-        mWidth = w;
-    }
 }
 
 
 void
-shMenu::addHeader (char *text)
+shMenu::addHeader (const char *text)
 {
     /* prints out the header */
     addItem (-1, text, NULL, -1);
@@ -962,14 +1123,13 @@ shMenu::addHeader (char *text)
 */
 
 int
-shMenu::getResult (void **value, int *count /* = NULL */ )
+shMenu::getResult (const void **value, int *count /* = NULL */ )
 {
     shMenuChoice *choice;
     int n;
 
-    if (0 == mResultIterator) {
-        accumulateResults (0);
-    }
+    if (!mDone)
+        accumulateResults ();
 
     while (mResultIterator < mChoices.count ()) {
         choice = mChoices.get (mResultIterator++);
@@ -986,14 +1146,44 @@ shMenu::getResult (void **value, int *count /* = NULL */ )
 };
 
 
+void
+shMenu::select (int i1, int i2,   /* mChoices[i1..i2) */ 
+                int action,       /* 0 unselect, 1 select, 2 toggle */
+                shObjectType t)   /* = kUninitialized */
+{
+    int i;
+    if (!(mFlags & kMultiPick)) {
+        return;
+    }
 
-/* called when we've filled up a whole screen full of results, or by the
-   done() method.  waits for user to input selection, and records the
-   results
-*/
+    for (i = i1; i < i2; i++) {
+        shMenuChoice *choice = mChoices.get (i);
+        if (choice->mCount < 0) {
+            continue;
+        }
+        if (t && 
+            mFlags & kCategorizeObjects && 
+            choice->mValue &&
+            t != ((shObject *) choice->mValue) -> mIlk->mType) 
+        {
+            continue;
+        }
+        if (0 == action) {
+            choice->mSelected = 0;
+        } else if (1 == action) {
+            choice->mSelected = choice->mCount;
+        } else if (2 == action) {
+            if (!choice->mSelected)
+                choice->mSelected = choice->mCount;
+            else 
+                choice->mSelected = 0;
+        }
+    }
+}
+
 
 void
-shMenu::accumulateResults (int more /* = 0 */ )
+shMenu::accumulateResults ()
 {
     int key;
     int i;
@@ -1003,127 +1193,189 @@ shMenu::accumulateResults (int more /* = 0 */ )
     WINDOW *win;
     PANEL *panel;
 
-    if (I->mPause) {
-        I->doMorePrompt ();
-    }
-
-    if (-1 == mFirstReady) {
-        /* our single pick has already been made */
-        return;
-    }
-    
-    mWidth += 10;
-    mWidth = mini (79, mWidth); 
-    win = newwin (mHeight + 2, mWidth, 0, maxi (0, I->mXMax - mWidth));
-    if (!win) {
-        //TODO: recover gracefully somehow?
-        endwin ();
-        fprintf (stderr, "Unable to create window.\n");
-        exit (-1);
-    }
-    panel = new_panel (win);
-    wattrset (win, A_BOLD);
-    mvwaddstr (win, 0, 1, mPrompt);
-    wattrset (win, A_NORMAL);
-//    mvwaddstr (win, mHeight + 2, 0, mFlags & kMultiPick ? "multipick" : "singlepick");
-    for (i = mFirstReady; i < mChoices.count (); i++) {
-        char buf[100];
-        shMenuChoice *item = mChoices.get (i);
-
-        if (-1 == item->mLetter) { /* this is a header entry */
-            wattrset (win, A_REVERSE);
-            snprintf (buf, 100, " %s ", item->mText);
-        } else if (mFlags & kNoPick) {
-            if (' ' == item->mLetter) {
-                snprintf (buf, 100, "%s", item->mText);
-            } else {
-                snprintf (buf, 100, "%c - %s", item->mLetter, item->mText);
-            }
-        } else {
-            if (' ' == item->mLetter) {
-                snprintf (buf, 100, "        %s", item->mText);
-            } else {
-                snprintf (buf, 100, "( ) %c - %s", 
-                          item->mLetter, item->mText);
-            }
-        }
-        mvwaddstr (win, 1 + i - mFirstReady, 1, buf);
-        wattrset (win, A_NORMAL);
-    }
-#ifdef DJGPP
-    if (more) {
-        mvwaddstr (win, 1 + i - mFirstReady, 1, "--More--");
-    } else {
-        mvwaddstr (win, 1 + i - mFirstReady, 1, "--End--");
-    }
-#else
-    mvwaddstr (win, 1 + i - mFirstReady, 1, more ? "--More--" : "--End--");
-#endif
-    update_panels (); 
-    doupdate();
-
-    if (mFlags & kNoPick) {
-        do {
-            key = I->getChar ();
-        } while (' ' != key && 13 != key && 27 != key);
-        mFirstReady = i;
-        goto done;
-    }
-
     while (1) {
-        key = I->getChar ();
-        if (' ' == key || 13 == key || 27 == key) {
-            break;
+        /* Display a menu page.  First, calculate the width needed:  */
+        int width = maxi (10, strlen (mPrompt) + 2);
+        int n = mini (mOffset + mHeight - 2, mChoices.count ());
+        for (i = mOffset; i < n; i++) {
+            width = maxi (width, strlen (mChoices.get (i) ->mText));
         }
-        if (key >= '0' && key <= '9') {
-            if (mFlags & kCountAllowed) {
-                nummode = 1;
-                num = num * 10 + key - '0';
-                if (num >= maxcount) { 
-                    num = maxcount;
+        width += 10;
+        width = mini (mWidth, width);
+        win = newwin (mHeight, width, 0, maxi (0, I->mXMax - width));
+        if (!win) {
+            I->debug ("Unable to create window (%d, %d, %d, %d)", 
+                      mHeight, mWidth, 0, maxi (0, I->mXMax - width));
+            I->p ("Uh oh!  Couldn't create window!!");
+            mDone = 1;
+            return;
+            // endwin ();
+            // fprintf (stderr, "Unable to create window.\n");
+            // exitZapm (-1);
+        }
+        panel = new_panel (win);
+        wattrset (win, A_BOLD);
+        mvwaddnstr (win, 0, 1, mPrompt, width);
+        wattrset (win, A_NORMAL);
+  //    mvwaddstr (win, mHeight + 2, 0, mFlags & kMultiPick ? "multipick" : "singlepick");
+
+        for (i = mOffset; i < n; i++) {
+            char buf[100];
+            shMenuChoice *item = mChoices.get (i);
+
+            if (-1 == item->mLetter) { /* this is a header entry */
+                wattrset (win, A_REVERSE);
+                snprintf (buf, 100, " %s ", item->mText);
+            } else if (mFlags & kNoPick) {
+                if (' ' == item->mLetter) {
+                    snprintf (buf, 100, "%s", item->mText);
+                } else {
+                    snprintf (buf, 100, "%c - %s", item->mLetter, item->mText);
+                }
+            } else {
+                if (' ' == item->mLetter) {
+                    snprintf (buf, 100, "        %s", item->mText);
+                } else {
+                    snprintf (buf, 100, "(%c) %c - %s",
+                              0 == item->mSelected ? ' ' :
+                              item->mCount == item->mSelected ? 'X' : '#',
+                              item->mLetter, item->mText);
                 }
             }
-            else {
-                /* TODO: tell user count not allowed for this command. */
-            }
+            mvwaddnstr (win, 1 + i - mOffset, 1, buf, width);
+            wattrset (win, A_NORMAL);
         }
-        for (i = mFirstReady; i < mChoices.count (); i++) {
-            shMenuChoice *item = mChoices.get (i);
-            if (item->mLetter == key) {
-                if (nummode) { /* set exact number picked */
-                    if (num > item->mCount) {
-                        /* TODO: warn user not that many items are available */
-                        num = item->mCount;
+        if (i == mChoices.count ()) {
+            mvwaddnstr (win, 1 + i - mOffset, 1, "--End--", width);
+        } else {
+            mvwaddnstr (win, 1 + i - mOffset, 1, "--More--", width);
+        }
+        update_panels (); 
+        doupdate();
+
+        while (1) {
+            key = I->getChar (win);
+
+            if (' ' == key || 13 == key) {
+                /* page through */
+                mOffset = n;
+                break;
+            } else if (27 == key) {
+                /* done */
+                mOffset = mChoices.count ();
+                break;
+            } else if ('>' == key) {
+                /* page down */
+                if (n < mChoices.count ()) {
+                    mOffset = n;
+                }
+                goto nextpage;
+            } else if ('<' == key) {
+                /* previous page */
+                mOffset -= (mHeight - 2);
+                mOffset = maxi (0, mOffset);
+                goto nextpage;
+            } else if ('^' == key) {
+                mOffset = 0;
+                goto nextpage;
+            } else if (mFlags & kNoPick) {
+                continue;
+            } else if ('@' == key) { 
+                select (0, mChoices.count(), 2); /* toggle all */
+                goto nextpage;
+            } else if ('-' == key) {
+                select (0, mChoices.count(), 0); /* deselect all */
+                goto nextpage;
+            } else if ('.' == key) {
+                select (0, mChoices.count(), 1); /* select all */
+                goto nextpage;
+            } else if ('~' == key) {
+                select (mOffset, n, 2); /* toggle page */
+                goto nextpage;
+            } else if ('\\' == key) {
+                select (mOffset, n, 0); /* deselect page */
+                goto nextpage;
+            } else if (',' == key) {
+                select (mOffset, n, 1); /* select page */
+                goto nextpage;
+            } else if ('$' == key) { 
+                select (0, mChoices.count(), 2, kMoney); /* toggle all gold */
+                goto nextpage;
+            } else if ('+' == key) { 
+                select (0, mChoices.count(), 2, kImplant); /* toggle all implants */
+                goto nextpage;
+            } else if ('?' == key) { 
+                select (0, mChoices.count(), 2, kFloppyDisk); /* toggle all floppies */
+                goto nextpage;
+            } else if ('!' == key) { 
+                select (0, mChoices.count(), 2, kCanister); /* toggle all cans */
+                goto nextpage;
+            } else if ('(' == key) { 
+                select (0, mChoices.count(), 2, kTool); /* toggle all tools */
+                goto nextpage;
+            } else if ('[' == key) { 
+                select (0, mChoices.count(), 2, kArmor); /* toggle all armor */
+                goto nextpage;
+            } else if (')' == key) { 
+                select (0, mChoices.count(), 2, kWeapon); /* toggle all weapons */
+                goto nextpage;
+            } else if ('=' == key) { 
+                select (0, mChoices.count(), 2, kProjectile); /* toggle all ammo */
+                goto nextpage;
+            } else if ('/' == key) { 
+                select (0, mChoices.count(), 2, kRayGun); /* toggle all ray guns */
+                goto nextpage;
+            } else if (key >= '0' && key <= '9') {
+                if (mFlags & kCountAllowed) {
+                    nummode = 1;
+                    num = num * 10 + key - '0';
+                    if (num >= maxcount) { 
+                        num = maxcount;
                     }
                 }
-                else { /* toggle all or none */
-                    num = item->mSelected ? 0 : item->mCount;
+                else {
+                    /* TODO: tell user count not allowed for this command. */
                 }
-                item->mSelected = num;
-                nummode = 0;
-                num = 0;
-
-                mvwaddch (win, 1 + i - mFirstReady, 2, 
-                          0 == item->mSelected ? ' ' :
-                          item->mCount == item->mSelected ? 'X' : '#'); 
-                wmove (win, 1 + i - mFirstReady, 2);
-                update_panels ();
-                doupdate();
-
-                if (!(mFlags & kMultiPick)) {
-                    mFirstReady = -1;
-                    goto done;
+            } else for (i = mOffset; i < n; i++) {
+                shMenuChoice *item = mChoices.get (i);
+                if (item->mLetter == key) {
+                    if (nummode) { /* set exact number picked */
+                        if (num > item->mCount) {
+                            /* TODO: warn user not that many items are available */
+                            num = item->mCount;
+                        }
+                    } else { /* toggle all or none */
+                        num = item->mSelected ? 0 : item->mCount;
+                    }
+                    item->mSelected = num;
+                    nummode = 0;
+                    num = 0;
+                    
+                    mvwaddch (win, 1 + i - mOffset, 2, 
+                              0 == item->mSelected ? ' ' :
+                              item->mCount == item->mSelected ? 'X' : '#'); 
+                    wmove (win, 1 + i - mOffset, 2);
+                    update_panels ();
+                    doupdate();
+                    
+                    if (!(mFlags & kMultiPick)) {
+                        mOffset = -1;
+                        goto nextpage;
+                    }
                 }
             }
         }
+nextpage:
+        hide_panel (panel);
+        del_panel (panel);
+        delwin (win);
+        update_panels (); 
+        I->drawScreen ();
+        if (mOffset < 0 || mOffset >= mChoices.count ()) {
+            break;
+        }
     }
-    mFirstReady = i; /* next time around, these choices won't be available */
- done:
-    hide_panel (panel);
-    del_panel (panel);
-    delwin (win);
-    update_panels (); 
-    I->drawScreen ();
+    mDone = 1;
 }
 
 
@@ -1154,7 +1406,7 @@ shInterface::showVersion ()
     mvwaddstr (win, 8, 12, "ZAPM version " ZAPM_VERSION " ");
     wattrset (win, A_NORMAL);
     mvwaddstr (win, 10, 12,
-               "Copyright (C) 2002-2004 Cyrus Dolph.");
+               "Copyright (C) 2002-2010 Cyrus Dolph.");
     mvwaddstr (win, 11, 12, "All rights reserved.");
     mvwaddstr (win, 12, 12, "http://www.zapm.org");
 
@@ -1162,7 +1414,7 @@ shInterface::showVersion ()
 
     update_panels ();
     doupdate();
-    I->getChar ();
+    I->getChar (win);
     hide_panel (panel);
     del_panel (panel);
     delwin (win);

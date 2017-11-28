@@ -36,6 +36,7 @@ shCreature::shCreature ()
 
     mX = -10;
     mY = -10;
+    mZ = 0;
     mType = kHumanoid;
     mProfession = NULL;
     mName[0] = 0;
@@ -44,11 +45,14 @@ shCreature::shCreature ()
     mAC = 0;
     mConcealment = 0;
     mBAB = 0;
+    mToHitModifier = 0;
+    mDamageModifier = 0;
     mChaDrain = 0;
     mLastRegen = MAXTIME;
     mLastLevel = NULL;
     mReflexSaveBonus = 0;
     mInateIntrinsics = 0;
+    mFeats = 0;
     mLevel = NULL;
     for (i = 0; i < kMaxEnergyType; i++) {
         mInateResistances[i] = 0;
@@ -84,6 +88,7 @@ shCreature::shCreature ()
     mMimic = kNothing;
     mSpotAttempted = 0;
     mTrapped = 0;
+    mDrowning = 0;
     mLastMoveTime = 0;
 }
 
@@ -95,17 +100,38 @@ shCreature::~shCreature ()
 
 
 int
-shCreature::isA (char *ilk)
+shCreature::isA (const char *ilk)
 {
     return (0 == strcmp (ilk, mIlk->mName));
 }
 
 
-char *
+const char *
 shCreature::herself ()
 {
-    return (char *) (hasMind () ? "himself" : "itself");
+    if (!hasMind ()) 
+        return "itself";
+    if (kFemale == mGender) 
+        return "herself";
+    else if (kMale == mGender)
+        return "himself";
+    else 
+        return "itself";
 }
+
+
+const char *
+shCreature::her (const char *thing)
+{
+    char *buf = GetBuf ();
+
+    snprintf (buf, SHBUFLEN, "%s %s", 
+              !hasMind () ? "its" :
+              kFemale == mGender ? "her" : "his",
+              thing);
+    return buf;
+}
+
 
 
 shCreature::TimeOut *
@@ -149,6 +175,7 @@ shCreature::checkTimeOuts ()
 {
     TimeOut *t;
     int i;
+    int oldcond = mConditions;
 
     for (i = mTimeOuts.count () - 1; i >= 0; --i) {
         t = mTimeOuts.get (i);
@@ -197,11 +224,14 @@ shCreature::checkTimeOuts ()
                     I->p ("You can move again.");
                 }
                 interrupt ();
+            } else if (FLEEING == t->mKey) {
+                mConditions &= ~kFleeing;
             } else if (FRIGHTENED == t->mKey) {
                 mConditions &= ~kFrightened;
                 if (isHero ()) {
                     I->drawSideWin ();
-                    I->p ("You regain your courage.");
+                    if (oldcond & kFrightened) 
+                        I->p ("You regain your courage.");
                 }
                 interrupt ();
             } else if (BLINDED == t->mKey) {
@@ -219,8 +249,14 @@ shCreature::checkTimeOuts ()
                 computeIntrinsics ();
                 interrupt ();
             } else if (SICKENED == t->mKey) {
-                mConditions &= ~kSickened;
-                if (isHero ()) {
+                if (sewerSmells ()) {
+                    /* keep sick */
+                    t->mWhen += FULLTURN;
+                    goto dontremove;
+                } else {
+                    mConditions &= ~kSickened;
+                }
+                if (isHero () && !isSickened ()) {
                     I->p ("You feel less sick.");
                 }
                 interrupt ();
@@ -242,26 +278,48 @@ shCreature::checkTimeOuts ()
                 interrupt ();
             } else if (TRAPPED == t->mKey) {
                 if (isTrapped ()) {
-                    char buf[60];
-                    the (buf, 60);
                     shFeature *f = mLevel->getFeature (mX, mY);
                     if (f && shFeature::kAcidPit == f->mType) {
                         if (isHero ()) {
-                            I->p ("You are being dissolved in acid!");
+                            I->p ("You are bathing in acid!");
+                        } else if (Hero.canSee (this)) {
+                            I->p ("%s splashes in the acid!", the ());
                         }
                         if (sufferDamage (&AcidPitTrapDamage)) {
                             if (!isHero () && Hero.canSee (this)) {
-                                I->p ("%s is %s!", buf, deathVerb ());
+                                pDeathMessage (the (), kSlain);
                             }
                             die (kMisc, "Dissolved in acid");
                             return -1;
                         }
                     }
-                    t->mWhen += 1000; 
+
+                    if (mDrowning) {
+                        --mDrowning;
+                        if (0 == mDrowning) {
+                            if (!isHero ()) {
+                                I->p ("%s drowns!", the ());
+                            }
+                            if (kSewage == mLevel->getSquare (mX, mY) ->mTerr) {
+                                die (kDrowned, "in a pool of sewage");
+                            } else {
+                                die (kDrowned, "in a pool");
+                            }
+                            return -1;
+                        } else if (2 == mDrowning) {
+                            if (isHero ()) 
+                                I->p ("You're drowning!");
+                        } else if (5 == mDrowning) {
+                            if (isHero ()) 
+                                I->p ("You're almost out of air!");
+                        }
+                    }
+                    t->mWhen += FULLTURN; 
                     ++i;
                     goto dontremove;
                 }
             }
+
             mTimeOuts.remove (t);
             delete t;
         dontremove: ;
@@ -320,6 +378,23 @@ shCreature::resetConfused ()
 
 
 void
+shCreature::makeFleeing (int howlong)
+{
+    mConditions |= kFleeing;
+    computeIntrinsics ();
+    setTimeOut (FLEEING, howlong, 0);
+}
+
+
+void
+shCreature::resetFleeing ()
+{
+    mConditions &= ~kFleeing;
+    clearTimeOut (FLEEING);
+}
+
+
+void
 shCreature::makeFrightened (int howlong)
 {
     mConditions |= kFrightened;
@@ -361,6 +436,10 @@ shCreature::resetHosed ()
 void
 shCreature::makeParalyzed (int howlong)
 {
+    if (isHero ()) {
+        if (!isParalyzed ())
+            I->p ("You can't move!");
+    }
     mConditions |= kParalyzed;
     setTimeOut (PARALYZED, howlong, isHero () ? 0 : 1);
 }
@@ -369,11 +448,13 @@ shCreature::makeParalyzed (int howlong)
 void
 shCreature::makeSickened (int howlong)
 {
-    if (isSickened ()) {
-        I->p ("You feel worse.");
-        howlong /= 2;
-    } else {
-        I->p ("You feel sick.");
+    if (isHero ()) {
+        if (isSickened ()) {
+            I->p ("You feel worse.");
+            howlong /= 2;
+        } else {
+            I->p ("You feel sick.");
+        }
     }
     mConditions |= kSickened;
     setTimeOut (SICKENED, howlong);
@@ -399,24 +480,28 @@ shCreature::makeSpeedy (int howlong)
 void
 shCreature::makeStunned (int howlong)
 {
+    if (isHero ()) {
+        if (isStunned()) {
+            I->p ("You reel...");
+            howlong /= 2;
+        } else {
+            I->p ("You stagger...");
+        }
+    }
+
     mConditions |= kStunned;
 
     checkConcentration ();
 
     if (mWeapon && RNG (2)) {
-        char buf[80];
         shObject *obj = mWeapon;
         unwield (obj);
         removeObjectFromInventory (obj);
         if (isHero ()) {
             I->drawSideWin ();
-            obj->your (buf, 80);
-            I->p ("You drop %s.", buf);
+            I->p ("You drop %s!", obj->your ());
         } else if (Hero.canSee (this)) {
-            char buf2[80];
-            the (buf, 80);
-            obj->her (buf2, 80, this);
-            I->p ("%s drops %s.", buf, buf2);
+            I->p ("%s drops %s!", the (), obj->her (this));
             if (obj->isUnpaid () && !Level->isInShop (mX, mY)) {
                 obj->resetUnpaid ();
             }
@@ -439,7 +524,12 @@ void
 shCreature::makeViolated (int howlong)
 {
     if (isHero ()) {
-        I->p ("You feel violated!");
+        if (isAsleep ())
+            I->p ("You have an unpleasant dream!");
+        else 
+            I->p ("You feel violated!");
+    } else if (Hero.canSee (this)) {
+        I->p ("%s looks a little uncomfortable.", the ());
     }
     mConditions |= kViolated;
     computeIntrinsics ();
@@ -465,9 +555,7 @@ shCreature::sterilize ()
 void
 shObject::applyConferredResistances (shCreature *target)
 {
-    if (!isInUse ()) return;
-
-    if (isA (kArmor)) {
+    if (isA (kArmor) && isWorn ()) {
         shArmorIlk *ilk = (shArmorIlk *) mIlk;
         int i;
         for (i = 0 ; i < kMaxEnergyType; i++) {
@@ -477,7 +565,9 @@ shObject::applyConferredResistances (shCreature *target)
             target->mConcealment += 20;
         }
         target->mPsiModifier += getPsiModifier ();
-    } else if (isA (kImplant)) {
+        target->mToHitModifier += ilk->mToHitModifier;
+        target->mDamageModifier += ilk->mDamageModifier;
+    } else if (isA (kImplant) && isWorn ()) {
         target->mPsiModifier += getPsiModifier ();
         if (isA ("cerebral coprocessor")) {
             target->mExtraAbil.mInt += mEnhancement;
@@ -511,12 +601,13 @@ shCreature::levelUp ()
     if (isHero ()) {
         I->p ("You've obtained level %d!", mCLevel);
         I->pause ();
-        I->doMorePrompt ();
         I->drawSideWin ();
         if (0 == mCLevel % 4) {
             Hero.gainAbility ();
         }
-        Hero.editSkills (Hero.mProfession->mNumPracticedSkills);
+        Hero.addSkillPoints (Hero.mProfession->mNumPracticedSkills);
+        I->p ("You may advance your skills with the 'E' command.");
+        //Hero.editSkills ();
         Hero.computeIntrinsics ();
     }
 }
@@ -575,52 +666,76 @@ shCreature::sufferAbilityDamage (shAbilityIndex idx, int amount,
 }
 
 
-/* if the attack is reflected, prints a message and returns 1,
-   o/w returns 0 */
+static int
+reflectDir (shDirection *dir, int scatter)
+{
+    switch (RNG(scatter)) {
+    case 0: *dir = uTurn (*dir); return 1;
+    case 1: *dir = rightTurn (*dir); return 0;
+    case 2: *dir = leftTurn (*dir); return 0;
+    case 3: *dir = rightTurn (rightTurn (*dir)); return 0;
+    case 4: *dir = leftTurn (leftTurn (*dir)); return 0;
+    case 5: *dir = rightTurn (uTurn (*dir)); return 0;
+    case 6: *dir = leftTurn (uTurn (*dir)); return 0;
+    default: return 0;
+    }
+}
+
+
+/* if the attack is reflected, prints a message, modifies dir, and returns 1
+   o/w returns 0 
+
+*/
 int
-shCreature::reflectAttack (shAttack *attack)
+shCreature::reflectAttack (shAttack *attack, shDirection *dir)
 {
     if ((kLaser == attack->mDamage[0].mEnergy && hasReflection ()) 
         || (kForce == attack->mDamage[0].mEnergy && 
             mWeapon && mWeapon->isA ("light saber")))
     {
-        char who[80];
-        char what[80];
+        const char *who = the ();
+        int refl = 0;
 
-        if (isHero ()) {
-            strcpy (who, "You");
-        } else {
-            the (who, 80);
-        }
         if (mWeapon && mWeapon->isA ("light saber")) {
             /* this could possibly involve a skill check? 
                Note you can parry even when blind! */
+            refl = reflectDir (dir, 7);
             if (isHero ()) {
-                mWeapon->your (what, 80);
-                I->p ("You parry the blast with %s.", what);
+                I->p ("You parry the %s with %s!", 
+                      attack->noun (), mWeapon->your ());
             } else {
-                mWeapon->her (what, 80, this);
-                I->p ("%s parries the blast with %s.", who, what);
+                I->p ("%s parries the %s with %s!", who, attack->noun (),
+                      mWeapon->her (this));
             }
         } else if (Hero.isBlind ()) { /* silently reflect */
+            refl = reflectDir (dir, 7);
             return 1;
         } else if (mHelmet && mHelmet->isA ("brain shield")) {
+            refl = reflectDir (dir, 7);
             if (isHero ()) {
-                I->p ("The blast is deflected by your shiny hat.");
+                I->p ("The %s is %s by your shiny hat!", attack->noun (),
+                      refl ? "reflected" : "deflected");
             } else {
-                I->p ("The blast is deflected by %s's shiny hat.", who);
+                I->p ("The %s is %s by %s's shiny hat!", attack->noun (), 
+                      refl ? "reflected" : "deflected", who);
             }
         } else if (mBodyArmor && mBodyArmor->isA ("suit of reflec armor")) {
+            refl = reflectDir (dir, 7);
             if (isHero ()) {
-                I->p ("The blast is deflected by your shiny armor.");
+                I->p ("The %s is %s by your shiny armor!", attack->noun (),
+                      refl ? "reflected" : "deflected");
             } else {
-                I->p ("The blast is deflected by %s's shiny armor.", who);
+                I->p ("The %s is %s by %s's shiny armor!", attack->noun (),
+                      refl ? "reflected" : "deflected", who);
             }
         } else {
+            refl = reflectDir (dir, 7);
             if (isHero ()) {
-                I->p ("The blast is deflected by your shiny skin.");
+                I->p ("The %s is %s by your shiny skin!", attack->noun (),
+                      refl ? "reflected" : "deflected");
             } else {
-                I->p ("The blast is deflected by %s's shiny skin.", who);
+                I->p ("The %s is %s by %s's shiny skin!", attack->noun (),
+                      refl ? "reflected" : "deflected", who);
             }
         }
         return 1;
@@ -632,6 +747,7 @@ shCreature::reflectAttack (shAttack *attack)
 
 /* works out damage done by an attack that has hit.  applies resistances, 
    special defences, special damage (e.g. stunning), and subtracts HP.
+   If hitmesg is supplied, it will be printed at an appropriate time.
    returns: 1 if attack kills us; o/w 0
 */
 int
@@ -645,17 +761,15 @@ shCreature::sufferDamage (shAttack *attack,
     int damage;
     int totaldamage = 0;
     int shieldworked = 0;
-    char buf[64];
     int flatfootedAC = getAC (1);
     int oldhp = mHP;
 
-    interrupt ();
+    const char *thewho = the ();
 
-    if (isHero ()) {
-        strcpy (buf, "you");
-    } else {
-        the (buf, 64);
-    }
+    if (kDead == mState) 
+        return 0;
+
+    interrupt ();
 
     if (attacker && attacker->isHero () && mHidden) {
         mHidden = 0;
@@ -668,13 +782,23 @@ shCreature::sufferDamage (shAttack *attack,
         int resist = getResistance (energy);
         int doresistmsg = 1;
 
+        if (0 == attack->mDamage[i].mNumDice)
+            break;
+
         /* compute base damage */
 
         damage = NDX (multiplier * attack->mDamage[i].mNumDice,
                       attack->mDamage[i].mDieSides);
+
+        I->diag ("rolling damage %dd%d%+d = %d",
+                 multiplier * attack->mDamage[i].mNumDice,
+                 attack->mDamage[i].mDieSides,
+                 bonus, damage + bonus);
+
         damage += bonus;
         damage /= divider;
-        if (damage < 1) damage = 1;
+        if (damage < 1) 
+            damage = 1;
         bonus = 0;
         multiplier = 1;
 
@@ -690,6 +814,7 @@ shCreature::sufferDamage (shAttack *attack,
                 shieldworked = 1;
             }
             damage -= absorbed;
+            I->diag ("shield absorbed %d", absorbed);
             if (0 == damage) {
                 continue;
             }
@@ -704,7 +829,7 @@ shCreature::sufferDamage (shAttack *attack,
         } else if (kCorrosive == energy) {
             if (shAttack::kSlime == attack->mType) {
                 if (Hero.canSee (this)) {
-                    I->p ("%s %s slimed!", buf, isHero () ? "get" : "gets");
+                    I->p ("%s %s slimed!", thewho, isHero () ? "get" : "gets");
                 }
             }
             damageEquipment (attack, energy);
@@ -734,13 +859,13 @@ shCreature::sufferDamage (shAttack *attack,
             }
             if (0 == damage) {
                 if (Hero.canSee (this)) {
-                    I->p ("But the poison doesn't affect %s.", buf);
+                    I->p ("But the poison doesn't affect %s.", thewho);
                 }
                 doresistmsg = 0;
             } else if (resist) {
                 if (Hero.canSee (this)) {
                     I->p ("%s %s some of the poison.", 
-                          buf, isHero () ? "resist" : "resists");
+                          thewho, isHero () ? "resist" : "resists");
                 }
                 doresistmsg = 0;
             }
@@ -749,14 +874,20 @@ shCreature::sufferDamage (shAttack *attack,
                 return 1;
             }
             if (isHero ()) { 
+                if (attacker && attacker->isA ("radspider") && damage &&
+                    !mMutantPowers[kShootWebs] && !RNG (10))
+                {
+                    Hero.getMutantPower (kShootWebs);
+                }
                 continue;
             }
             /* for balance, monsters take HP damage in addition to str drain */
             damage *= 2;
         } else if (kBlinding == energy) {
-            if (!isBlind ()) {
+            if (!isBlind () && damage) {
                 if (isHero ()) {
-                    I->p ("You are blinded by the beam.");
+                    I->p ("You are blinded!");
+                    I->pauseXY(Hero.mX, Hero.mY);
                 }
                 makeBlinded (1000 * damage);
             }
@@ -771,8 +902,18 @@ shCreature::sufferDamage (shAttack *attack,
         } else if (kConfusing == energy) {
             makeConfused (1000 * damage);
             continue;
+        } else if (kDisarming == energy) {
+/*FIXME */
         } else if (kViolating == energy) {
-            makeViolated (1000 * damage);
+            if (!damage && Hero.canSee (this)) {
+                if (isHero ()) {
+                    I->p ("You aren't affected.");
+                } else {
+                    I->p ("%s doesn't seem to notice.", thewho);
+                }
+            }
+            if (damage) 
+                makeViolated (1000 * damage);
             continue;
         } else if (kParalyzing == energy) {
             if (isHero ()) {
@@ -781,14 +922,48 @@ shCreature::sufferDamage (shAttack *attack,
                 makeParalyzed (10000 * damage);
             }
             continue;
+        } else if (kBrainExtracting == energy) {
+            int i;
+            if (!isHero ())
+                continue;
+            if (mHelmet) {
+                I->p ("%s removes %s!", THE (attacker), YOUR (mHelmet));
+                doff (mHelmet);
+                continue;
+            } 
+            for (i = shImplantIlk::kFrontalLobe; 
+                 i <= shImplantIlk::kOccipitalLobe; i++) 
+            {
+                if (mImplants[i]) {
+                    I->p ("%s extracts your %s!", 
+                          THE (attacker), YOUR (mImplants[i]));
+                    doff (mImplants[i]);
+                    break;
+                }
+            }
+            if (i <= shImplantIlk::kOccipitalLobe) 
+                continue;
+            if (Hero.getStoryFlag ("brain incision")) {
+                I->p ("%s extracts your brain!", THE (attacker));
+                initGlyph (&mGlyph, '!', kWhite, 0);
+                mMaxAbil.mStr = mAbil.mStr = 0;
+                mMaxAbil.mCon = mAbil.mCon = 0;
+                mMaxAbil.mDex = mAbil.mDex = 0;
+                mMaxAbil.mAgi = mAbil.mAgi = 0;
+                return 1;
+            } else {
+                I->p ("%s makes an incision into your skull!", 
+                      THE (attacker));
+                damage = RNG (1,6);
+                Hero.setStoryFlag ("brain incision", 1);
+            }
         } else if (kDisintegrating == energy) {
             if (isHero ()) {
                 shObject *obj;
                 if (NULL != (obj = mBodyArmor) ||
                     NULL != (obj = mJumpsuit))
                 {
-                    obj->your (buf, 80);
-                    I->p ("%s is annihilated!", buf);
+                    I->p ("%s is annihilated!", obj->your ());
                     removeObjectFromInventory (obj);
                     delete obj;
                     continue;
@@ -797,12 +972,12 @@ shCreature::sufferDamage (shAttack *attack,
             } else if (damage) {
                 return 1;
             } else if (Hero.canSee (this)) {
-                I->p ("%s resists!", buf);
+                I->p ("%s resists!", thewho);
                 doresistmsg = 0;
             }
         } else if (kMagnetic == energy) {
             if (0 == damage && !isHero () && Hero.canSee (this)) {
-                I->p ("%s is unaffected.", buf);
+                I->p ("%s is unaffected.", thewho);
                 doresistmsg = 0;
             }
         } else if (kRadiological == energy) {
@@ -811,7 +986,7 @@ shCreature::sufferDamage (shAttack *attack,
                 mRad += damage;
             } else if (0 == damage) {
                 if (Hero.canSee (this)) {
-                    I->p ("%s is unaffected.", buf);
+                    I->p ("%s is unaffected.", thewho);
                     doresistmsg = 0;
                 }
             } else { /* treat like poison */
@@ -819,37 +994,9 @@ shCreature::sufferDamage (shAttack *attack,
                     /* dead, dead, dead! */
                     return 1;
                 } else if (Hero.canSee (this)) {
-                    I->p ("%s seems weakened.", buf);
+                    I->p ("%s seems weakened.", thewho);
                 }
                 sterilize ();
-            }
-            continue;
-        } else if (kSuing == energy) {
-            if (isHero ()) {
-                int amount = loseMoney (damage);
-                if (amount) {
-                    attacker->gainMoney (damage);
-                } else {
-                    /* I->p ("But you refuse to pay!"); */
-                }
-            }
-            continue;
-        } else if (kSeizing == energy) {
-            shObjectVector v;
-            if (isHero ()) {
-                selectObjectsByFunction (&v, mInventory, &shObject::isCracked);
-                if (v.count ()) {
-                    int i = selectObjects (&v, mInventory, Computer);
-                    I->p ("The lawyer seizes your pirated software%s",
-                          i > 1 ? " and your computers!" : 
-                          1 == i ? " and your computer!" : "!");
-
-                    for (i = 0; i < v.count (); i++) {
-                        shObject *obj = v.get (i);
-                        removeObjectFromInventory (obj);
-                        attacker -> addObjectToInventory (obj);
-                    }
-                }
             }
             continue;
         } else if (kCreditDraining == energy) {
@@ -868,7 +1015,16 @@ shCreature::sufferDamage (shAttack *attack,
                 attacker->mHidden = 0;
             }
             continue;
+        } else if (kWebbing == energy) {
+            if (isHero ()) 
+                I->p ("You are entangled in a web!");
+            else
+                I->p ("%s is entangled in the web!", thewho);
+            mTrapped += damage;
+            continue;
         } else if (kHealing == energy) {
+            healing (0);
+/*
             if (isHero () && mHP < mMaxHP) {
                 I->p ("Your wounds are rapidly healing!");
             }
@@ -876,19 +1032,20 @@ shCreature::sufferDamage (shAttack *attack,
             if (mHP > mMaxHP) {
                 mHP = mMaxHP;
             }
+*/
             continue;
         } else if (kRestoring == energy) {
             restoration ();
             continue;
-        }
+        } 
 
         if (resist && doresistmsg && 
             !isHero () && Hero.canSee (this)) 
         {
             if (0 == damage) {
-                I->p ("%s is unaffected.", buf);
+                I->p ("%s is unaffected.", thewho);
             } else {
-                I->p ("%s resists.", buf);
+                I->p ("%s resists.", thewho);
             }
         }
 
@@ -902,11 +1059,11 @@ shCreature::sufferDamage (shAttack *attack,
         if (isHero ()) {
             I->p ("Your force shield absorbs %s damage%s", 
                   totaldamage ? "some of the" : "the",
-                  fizzle ? " and fizzles out." : ".");
+                  fizzle ? " and fizzles out!" : "!");
         } else if (Hero.canSee (this)) {
-            I->p ("%s's force shield absorbs %s damage%s", buf,
+            I->p ("%s's force shield absorbs %s damage%s", thewho,
                   totaldamage ? "some of the" : "the",
-                  fizzle ? " and fizzles out." : ".");
+                  fizzle ? " and fizzles out!" : "!");
         }
     }
 
@@ -925,11 +1082,11 @@ shCreature::sufferDamage (shAttack *attack,
     if (mHP < 0) {
         mHP = 0;
     }
-    I->diag ("dealt %d damage to %p, now has %d / %d HP", 
-             totaldamage, this, mHP, mMaxHP);
+    I->diag ("dealt %d damage to %s (%p), now has %d / %d HP", 
+             totaldamage, the (), this, mHP, mMaxHP);
 
     if (isHero ()) {
-        if (isAsleep () && sportingD20 () > 16) {
+        if (isAsleep () && sportingD20 () + totaldamage > 16) {
             wakeUp ();
         }
         if (hasHealthMonitoring () &&
@@ -968,52 +1125,73 @@ shCreature::sufferDamage (shAttack *attack,
             }
 #endif
         }
+
         return 1;
     }
     return 0;
 }
 
 
-char *
-shCreature::deathVerb (int presenttense /* = 0*/)
+void
+shCreature::pDeathMessage (const char *monname, shCauseOfDeath how, 
+                           int presenttense /* = 0 */)
 {
+    if (kAnnihilated == how) {
+        I->p ("%s is annihilated!", monname);
+        return;
+    }
+    if (isExplosive () && kSlain == how) {
+        if (Hero.canSee (this)) {
+            I->p ("%s explodes!", the ());
+        } else if (distance (&Hero, mX, mY) <= 100) {
+            I->p ("You hear an explosion!");
+        } else {
+            I->p ("You hear an explosion in the distance.");
+        }
+        return;
+    }
     if (presenttense) {
-        if (isAlive ()) return "kill"; 
-        if (isRobot ()) return "disable";
-        if (isProgram ()) return "derez";
-        return "destroy";
+        if (isAlive ()) 
+            I->p ("You kill %s!", monname); 
+        else if (isRobot ()) 
+            I->p ("You disable %s!", monname);
+        else if (isProgram ()) 
+            I->p ("You derez %s!", monname);
+        else 
+            I->p ("You destroy %s!", monname);
     } else {
-        if (isAlive ()) return "killed"; 
-        if (isRobot ()) return "disabled";
-        if (isProgram ()) return "derezzed";
-        return "destroyed";
+        if (isAlive ()) 
+            I->p ("%s is killed!", monname); 
+        else if (isRobot ())
+            I->p ("%s is disabled!", monname); 
+        else if (isProgram ())
+            I->p ("%s is derezzed!", monname); 
+        else 
+            I->p ("%s is destroyed!", monname); 
     }
 }
 
 
 int
-shCreature::die (shCauseOfDeath how, char *killer)
+shCreature::die (shCauseOfDeath how, const char *killer)
 {
     int i;
-    char buf[64];
 
-    the (buf, 64);
-    I->debug ("%s (%p) is dead", buf, this);
+    I->debug ("%s (%p) is dead", the (), this);
     
     if (isPet ()) {
         Hero.mPets.remove (this);
         if (!Hero.canSee (this)) {
             I->p ("You have a sad feeling for a moment, and then it passes.");
         }
-        if (RNG (3)) {
+        if (kSlain == how && RNG (3)) {
             Level->putObject (createObject ("restraining bolt", 1), mX, mY);
         }
     }
 
-    if (hasAcidBlood () && kSlain == how) {
+    if (hasAcidBlood () && kSlain == how && !GameOver) {
         int x, y;
         shCreature *c;
-        char buf[60];
 
         for (x = mX - 1; x <= mX + 1; x++) {
             for (y = mY - 1; y <= mY + 1; y++) {
@@ -1022,13 +1200,12 @@ shCreature::die (shCauseOfDeath how, char *killer)
                 if (c->isHero ()) {
                     I->p ("You are splashed by acid!");
                 } else if (Hero.canSee (this)) {
-                    c->the (buf, 50);
-                    I->p ("%s is splashed by acid!", buf);
+                    I->p ("%s is splashed by acid!", c->the ());
                 }
                 if (c->sufferDamage (&AcidBloodAttack)) {
                     c->die (kSlain, "an acid splash");
                     if (!c->isHero ()) {
-                        I->p ("%s is %s!", buf, c->deathVerb ());
+                        c->pDeathMessage (c->the (), kSlain);
                     }
                 }
             }
@@ -1052,7 +1229,7 @@ shCreature::die (shCauseOfDeath how, char *killer)
         /* no corpse */
     } else if (isA ("killer rabbit")) {
         Level->putObject (createObject ("rabbit's foot", 1), mX, mY);
-    } else if (isRobot ()) {
+    } else if (isRobot () && !(isExplosive () && kSlain == how)) {
         shObject *wreck = createCorpse (this);
         Level->putObject (wreck, mX, mY);
     }
@@ -1063,7 +1240,75 @@ shCreature::die (shCauseOfDeath how, char *killer)
         mLevel->removeCreature (this);
     }
 
+
+    if (isExplosive () && kSlain == how) {
+        Level->areaEffect (&ExplodingMonsterAttack, NULL, mX, mY, 
+                           kOrigin, this, mCLevel);
+    }
+
     return 1;
+}
+
+
+void
+shCreature::revealSelf ()
+{
+    const char *a_monster;
+    const char *a_thing;
+    int mimic = 0;
+    shFeature *f = mLevel->getFeature (mX, mY);
+    shObjectVector *v = mLevel->getObjects (mX, mY);
+    shObject *obj;
+    int i;
+
+    if (mHidden < 0) {
+        mHidden = 0;
+        return; //no need to print a message since we knew it was there
+    } else {
+        mHidden = 0;
+    } 
+
+    if (Hero.canSee (this)) {
+        a_monster = an ();
+    } else {
+        return; // no message 
+    }
+
+
+    switch (mMimic) {
+    case kObject:
+        mimic = 1;
+        mMimic = kNothing;
+        a_thing = mMimickedObject->mVagueName;
+        goto done;
+    default:
+        mimic = 0;
+    }
+
+
+    if (v && canHideUnderObjects ()) {
+        for (i = 0; i < v->count (); i++) {
+            obj = v->get (i);
+            if (canHideUnder (obj)) {
+                a_thing = obj->an ();
+                goto done;
+            }
+        }
+    }
+    if (f && canHideUnder (f)) {
+        a_thing = f->the ();
+    } else if (mLevel->isWatery (mX, mY) && canHideUnderWater ()) {
+        a_thing = mLevel->getSquare (mX, mY) ->the ();
+    } else {
+        // impossible!
+        a_thing = "it";
+    }
+
+done:
+    if (mimic) 
+        I->p ("the %s morphs into %s!", a_thing, a_monster);
+    else 
+        I->p ("%s was hiding under %s!", a_monster, a_thing);
 }
 
 
@@ -1091,9 +1336,8 @@ shCreature::checkRadiation ()
             }
         }
     }
-
     if (Level->isRadioactive (mX, mY)) {
-        res += 2;
+        res += 5;
     }
 
     return res;
@@ -1209,7 +1453,7 @@ shCreature::countEnergy (int *tankamount)
     int res = 0;
     int i;
 
-    selectObjects (&v, mInventory, EnergyCell);
+    selectObjects (&v, mInventory, &EnergyCellIlk);
     for (i = 0; i < v.count (); i++) {
         res += v.get (i) -> mCount;
     }
@@ -1270,7 +1514,7 @@ shCreature::loseEnergy (int cnt)
         }
         v.reset ();
 
-        selectObjects (&v, mInventory, EnergyCell);
+        selectObjects (&v, mInventory, &EnergyCellIlk);
         for (i = 0; i < v.count (); i++) {
             shObject *obj = v.get (i);
             int unpaid = isHero () && obj->isUnpaid ();
@@ -1363,12 +1607,10 @@ shCreature::wield (shObject *obj, int quiet /* = 0 */ )
         return 0;
     }
     mWeapon = obj;
-    if (0 == quiet && Hero.canSee (this) && mWeapon) {
-        char buf[40], buf2[40];
-        the (buf, 40);
+    if (0 == quiet && !mHidden && Hero.canSee (this) && mWeapon) {
         mWeapon->setAppearanceKnown ();
-        mWeapon->an (buf2, 40);
-        I->p ("%s wields %s!", buf, buf2);
+        I->p ("%s wields %s!", the (), mWeapon->an ());
+        Hero.interrupt ();
     }
     computeIntrinsics ();    
     return 1;
@@ -1404,7 +1646,7 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
         shImplantIlk::Site site = ((shImplantIlk *) (obj->mIlk)) -> mSite;
         if (shImplantIlk::kAnyBrain == site) {
             int i;
-            for (i = 0; i < shImplantIlk::kLeftEar; i++) {
+            for (i = 0; i <= shImplantIlk::kCerebellum; i++) {
                 if (!mImplants[i]) {
                     site = (shImplantIlk::Site) i;
                     goto foundsite;
@@ -1416,6 +1658,8 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
             return 0;
         } else if (shImplantIlk::kAnyEar == site) {
             site = shImplantIlk::kLeftEar;
+        } else if (shImplantIlk::kAnyEye == site) {
+            site = shImplantIlk::kRightEyeball;
         }
 
     foundsite:
@@ -1428,10 +1672,8 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
         }
         mImplants[site] = obj;
         if (isHero ()) {
-            char buf[50];
-            obj->the (buf, 50);
             I->p ("You install %s in your %s.",
-                  buf, describeImplantSite (site));
+                  obj->the (), describeImplantSite (site));
             obj->mImplantSite = site;
         }
     } else {
@@ -1444,8 +1686,13 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
         int wasunknown = !obj->isIlkKnown ();
         //int knowledge = obj->getFlag (shObject::kKnownExact);
         
-        if (obj->isA (kArmor) && obj->isEnhanceable ()) {
-            obj->setEnhancementKnown ();
+        if (obj->isA (kArmor)) {
+            if (obj->isEnhanceable ())
+                obj->setEnhancementKnown ();
+            if (obj->isPoweredArmor ()) {
+                initGlyph (&mGlyph, kSymHero, 
+                           obj->mIlk->mGlyph.mForeground, 0);
+            }
         }
         if (obj->isA ("cortex crossover")) {
             I->p ("You flip out!");
@@ -1462,6 +1709,7 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
             I->p ("You zoom into the air!");
             obj->setIlkKnown ();
             mTrapped = 0;
+            mDrowning = 0;
         } else if (obj->isA ("pair of x-ray goggles") &&
                    !(before & kXRayVision)) 
         {
@@ -1476,18 +1724,17 @@ shCreature::don (shObject *obj, int quiet /* = 0 */ )
                 obj->setIlkKnown ();
                 obj->setEnhancementKnown ();
             }
+        } else if (obj->isA ("stormtrooper helmet") && !isBlind ()) {
+            I->p ("It's hard to see out of this helmet.");
+            obj->setIlkKnown ();
         }
         /* 
         if ((wasunknown && obj->isIlkKnown ()) || 
             (knowledge != obj->getFlag (shObject::kKnownExact)))
         */
-        {
-            char buf[80];
-            obj->resetWorn ();
-            obj->inv (buf, 80);
-            obj->setWorn ();
-            I->p ("%c - %s", obj->mLetter, buf);
-        }
+        obj->resetWorn ();
+        I->p ("%c - %s", obj->mLetter, obj->inv ());
+        obj->setWorn ();
     }
     return 1;
 }
@@ -1498,6 +1745,9 @@ shCreature::doff (shObject *obj, int quiet /* = 0 */ )
 {
     if (obj == mBodyArmor) {
         mBodyArmor = NULL;
+        if (obj->isPoweredArmor ()) {
+            initGlyph (&mGlyph, kSymHero, kWhite, 0);
+        }
     } else if (obj == mJumpsuit) {
         mJumpsuit = NULL;
     } else if (obj == mHelmet) {
@@ -1532,6 +1782,8 @@ doffed:
                 obj->setIlkKnown ();
                 I->p ("You float down.");
             }
+        } else if (obj->isA ("stormtrooper helmet") && !isBlind ()) {
+            I->p ("You can see much better now.");
         }
     }
     return 1;
@@ -1576,7 +1828,8 @@ shCreature::damageEquipment (shAttack *atk, shEnergyType energy)
             v.add (mJumpsuit);
         }
         if (mBoots) v.add (mBoots);
-        selectObjects (&v, mInventory, kFloppyDisk);
+        if (!RNG(4))
+            selectObjects (&v, mInventory, kFloppyDisk);
     } else if (kBugging == energy) {
         selectObjectsByFunction (&v, mInventory, &shObject::isBuggy, 1);
     }
@@ -1618,14 +1871,53 @@ shCreature::openDoor (int x, int y)
         return 0;
     }
     if (shFeature::kLocked & f->mDoor) {
-        if (&Hero == this) {
-            shObjectIlk *keyneeded = f->keyNeededForDoor ();
-            I->p ("The door is locked.  A %s is required.", 
-                  isBlind () ? "keycard of some kind" : keyneeded->mName);
+        if (isHero ()) {
+            if (f->isLockBrokenDoor ()) {
+                I->p ("The door is held shut by a broken lock!");
+            } else if (f->isRetinaDoor ()) {
+                I->p ("\"Initiating retina scan...\"");
+                I->pause ();
+                if (mImplants[shImplantIlk::kRightEyeball] && 
+                    mImplants[shImplantIlk::kRightEyeball]
+                    ->isA ("Eye of the BOFH"))
+                {
+                    I->p ("\"Identification positive.  "
+                          "Welcome, Mr. Operator!\"");
+                    mImplants[shImplantIlk::kRightEyeball]->setIlkKnown ();
+                    f->unlockDoor ();
+                    f->mType = shFeature::kDoorOpen;
+                    return 1;
+                } else {
+                    I->p ("\"Identification negative.  Access denied.\"");
+                }
+            } else {
+                int i;
+                shObjectIlk *keyneeded = f->keyNeededForDoor ();
+
+                I->p ("The door is locked.  A %s is required.", 
+                      isBlind () ? "keycard of some kind" : keyneeded->mName);
+
+                shObjectVector mykeys;
+                
+                if (!isBlind ()) 
+                    selectObjects (&mykeys, mInventory, keyneeded);
+                if (MasterKey->mFlags & kIdentified)
+                    selectObjects (&mykeys, mInventory, MasterKey);
+                selectObjects (&mykeys, mInventory, LockPick);
+
+                for (i = 0; i < mykeys.count (); i++) {
+                    if (I->yn ("Use your %s?", 
+                               mykeys.get (i) ->getDescription ())) {
+                        return Hero.useKey (mykeys.get (i), f);
+                    }
+                }
+            }
         }
         return 0;
     }
     f->mType = shFeature::kDoorOpen;
+    if (mLevel == Level) 
+        Level->computeVisibility ();
     return 1;
 }
 
@@ -1645,6 +1937,10 @@ shCreature::closeDoor (int x, int y)
         return 0;
     }
     f->mType = shFeature::kDoorClosed;
+    if (f->isRetinaDoor ())
+        f->lockDoor ();
+    if (mLevel == Level) 
+        Level->computeVisibility ();
     return 1;
 }
 
@@ -1653,6 +1949,9 @@ shCreature::closeDoor (int x, int y)
 int
 shCreature::isMoving ()
 { 
+    if (mHidden) {
+        return 0;
+    }
     if (mConcealment > 15) {
         return 0;
     }
@@ -1670,7 +1969,7 @@ shCreature::isMoving ()
         /* these creatures have the ability to remain perfectly still */
         return 0;
     case kCyborg:
-    case kAbberation:
+    case kAberration:
     case kAnimal:
     case kBeast:
     case kHumanoid:
@@ -1725,22 +2024,21 @@ shCreature::rollAbilityScores (int strbas, int conbas, int agibas, int dexbas,
             }
         }
     } else if (mCLevel < 4 && RNG (6)) {
-        /* lower level monsters have less variety */
-        mAbil.mStr = permuteScore (strbas, 5 + NDX (2, 4));
-        mAbil.mCon = permuteScore (conbas, 5 + NDX (2, 4));
+        mAbil.mStr = permuteScore (strbas, 6 + NDX (2, 3));
+        mAbil.mCon = permuteScore (conbas, 6 + NDX (2, 3));
+        mAbil.mAgi = permuteScore (agibas, 6 + NDX (2, 3));
+        mAbil.mDex = permuteScore (dexbas, 6 + NDX (2, 3));
+        mAbil.mInt = permuteScore (intbas, 6 + NDX (2, 3));
+        mAbil.mWis = permuteScore (wisbas, 6 + NDX (2, 3));
+        mAbil.mCha = permuteScore (chabas, 6 + NDX (2, 3));
+    } else {
+        mAbil.mStr = permuteScore (strbas, 7 + NDX (2, 2));
+        mAbil.mCon = permuteScore (conbas, 7 + NDX (2, 2));
         mAbil.mAgi = permuteScore (agibas, 5 + NDX (2, 4));
         mAbil.mDex = permuteScore (dexbas, 5 + NDX (2, 4));
-        mAbil.mInt = permuteScore (intbas, 5 + NDX (2, 4));
+        mAbil.mInt = permuteScore (intbas, 6 + NDX (2, 3));
         mAbil.mWis = permuteScore (wisbas, 5 + NDX (2, 4));
-        mAbil.mCha = permuteScore (chabas, 5 + NDX (2, 4));
-    } else {
-        mAbil.mStr = permuteScore (strbas, NDX (3, 6));
-        mAbil.mCon = permuteScore (conbas, NDX (3, 6));
-        mAbil.mAgi = permuteScore (agibas, NDX (3, 6));
-        mAbil.mDex = permuteScore (dexbas, NDX (3, 6));
-        mAbil.mInt = permuteScore (intbas, NDX (3, 6));
-        mAbil.mWis = permuteScore (wisbas, NDX (3, 6));
-        mAbil.mCha = permuteScore (chabas, NDX (3, 6));
+        mAbil.mCha = permuteScore (chabas, 7 + NDX (2, 2));
     }
 
     mMaxAbil.mStr = mAbil.mStr;
@@ -1856,7 +2154,7 @@ shCreature::computeAC ()
         I->p ("computeAC: unknown size!");
         abort ();
     }
-        
+
     if (mBodyArmor) {
         mAC += mBodyArmor->getArmorBonus ();
     }
@@ -1872,6 +2170,20 @@ shCreature::computeAC ()
     if (mBoots) {
         mAC += mBoots->getArmorBonus ();
     }   
+}
+
+
+/* returns non-zero if the creature should be sick from the sewer smell */
+int
+shCreature::sewerSmells ()
+{
+    if (mLevel && (shMapLevel::kSewer == mLevel->mType || 
+                   shMapLevel::kSewerPlant == mLevel->mType)
+        && !hasAirSupply () && !isBreathless () && !mResistances[kSickening])
+    {
+        return 1;
+    }
+    return 0;
 }
 
 
@@ -1895,11 +2207,16 @@ shCreature::computeIntrinsics ()
     int newburden;
     int weight;
     int intrinsics;
-    
+    int smelled = 0;
+
+    smelled = sewerSmells ();
+
     mIntrinsics = mInateIntrinsics;
     memcpy (&mResistances, &mInateResistances, sizeof (mResistances));
     mConcealment = 0;
     mPsiModifier = 0;
+    mToHitModifier = 0;
+    mDamageModifier = 0;
     mSpeed = mIlk->mSpeed + mSpeedBoost;
     for (i = 1; i <= 7; i++) {
         mMaxAbil.changeByIndex (i, - mExtraAbil.getByIndex (i));
@@ -1927,7 +2244,19 @@ shCreature::computeIntrinsics ()
     {
         setBlind ();
     }      
-
+    if (isBlind ()) {
+        /* vision enhancements do no good (harm) when blind */
+        if (mGoggles) {
+            shArmorIlk *ilk = (shArmorIlk *) mGoggles->mIlk;
+            mToHitModifier -= ilk->mToHitModifier;
+            mDamageModifier -= ilk->mDamageModifier;
+        }
+        if (mHelmet) {
+            shArmorIlk *ilk = (shArmorIlk *) mHelmet->mIlk;
+            mToHitModifier -= ilk->mToHitModifier;
+            mDamageModifier -= ilk->mDamageModifier;
+        }
+    }
     if (isHero ()) {
         I->crazyIvan (mIntrinsics & kCrazyIvan);
     }
@@ -1941,6 +2270,26 @@ shCreature::computeIntrinsics ()
     
     if (mBodyArmor && mBodyArmor->isPoweredArmor ()) {
         mCarryingCapacity += mBodyArmor->getMass ();
+    }
+
+    if (smelled && hasAirSupply ()) {
+        if (isHero ())
+            I->p ("Fresh air!");
+    } else if (!smelled && sewerSmells ()) {
+        if (isHero ())
+            I->p ("What a terrible smell!");
+        makeSickened (2000);
+    }
+
+    if (mDrowning && hasAirSupply ()) {
+        mDrowning = 0;
+        if (isHero ()) {
+            I->p ("You can breathe!");
+        }
+    } else if (!mDrowning && !hasAirSupply () && isUnderwater ()) {
+        mDrowning = getCon ();
+        if (isHero ())
+            I->p ("You're holding your breath!");
     }
 
     weight = mWeight;
@@ -2092,7 +2441,7 @@ shCreature::getWeaponSkillModifier (shObjectIlk *ilk)
         result -= 4;
     }
 
-    result += mBAB;
+    result += mBAB + mToHitModifier;
     switch (getSize ()) {
     case kFine: result += 8; break;
     case kDiminutive: result += 4; break;
@@ -2109,7 +2458,7 @@ shCreature::getWeaponSkillModifier (shObjectIlk *ilk)
     }
 
     result += ABILITY_MODIFIER (mAbil.getByIndex (ability));
-    if (NULL == skill) {
+    if (NULL == skill || 0 == skill->mRanks) {
         /* inflict a slight penalty for lacking weapon skill,
            since we're not using SRD Feats */
         result -= 2; 

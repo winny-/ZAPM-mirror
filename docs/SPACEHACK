@@ -1,9 +1,11 @@
-ZapM
+ZapM, a sci-fi roguelike
+
+(other rejected titles: SpaceHack, Dork Patrol, DorkHack, Zap, ZapEm, ZapIt)
 
 
+This file is like my scratch 
 
 
-(other rejected titles: Dork Patrol, DorkHack, Zap, ZapEm, ZapIt)
 
 abilities:
  str - melee to hit and damage
@@ -71,44 +73,10 @@ character class ideas:
  psion (wis, cha, int)
    equip: psionic amplifier
 
+ ninja
+
 
  techpriest (dex, int, wis)     <WH40K>
-
-
-
-dmg type    c=concussive s=slashing h=heat l=light p=piercing e=electrical r=radioactive
-
-weapons
- melee
-  knife            d4  p        simple
-  club             d6  c        simple
-  light saber      d8  sh       spec
-  powerglove       2d6 c        spec
-  powersword       2d8 s        spec
-  variable-sword
-  
- thrown                    rng 
-  frag grenade     2d6 cp  10   simple
-  stun grenade     2d6     10   simple
-  gauss grenade    2d6 e   10   simple
-  rad grenade      3d6 r   10   simple
-  knife            d4  p   10   spec
-  thermal detonator
-
-
- ranged
-
-  pistol           d8  p   30   
-  laser pistol     d10 h   30   
-  stun blaster     d8      20   
-
-  pulse rifle      3d8 p   200  
-  laser rifle      d12 l   150  
-  volt gun         3d8 e   50   
-  plasma gun       6d6 h   10   
-  rocket launcher  
-   frag rocket     9d6 c   200  
-   tac nuke      20d20 chr 200      huge blast radius  (artifact?)
 
 
 armor
@@ -142,6 +110,7 @@ armor
   displacer       0/0     *segmented belt
   transporter     0/0     *utility belt  
   antigravity     0/0     *reinforced belt    (usually buggy)
+  invisibility            
 
 implants
 
@@ -511,6 +480,7 @@ Dune (hunter seeker, atomic shields, spice - look this stuff up)
 
 Artifacts
 
+Mister Pointy (Buffy)
 Continuum Transfunctioner (from Dude Where's my car?)
   
 The Black Box (from Sneakers)
@@ -524,17 +494,6 @@ Energy Dome (Freedom of Choice)
 BFG 9000 (Doom)
 Vera (Jayne's gun from Firefly)
 Old Painless (chaingun from Predator)
-
- It was designed according to ancient ziggaurat mound proportions used
- in votive worship. Like the mounds it collects energy and
- recirculates it.  In this case the Dome collects energy that escapes
- from the crown of the human head and pushes it back into the Medula
- Oblongata for increased mental energy. It's very important that you
- buy a cheap plastic hardhat liner, adjust it to your head size and
- affix it with duct tape or Super Glue to the inside of the Dome. This
- allows the Dome to "float" just above the cranium and thus do it's
- job.  Unfortunately, sans hard hat liner, the recirculation of energy
- WILL NOT occur.  GERALD V. CASALE - DEVO, INC.
 
 
 
@@ -1047,6 +1006,22 @@ library level with computer terminal
 
 
 
+
+
+creatures with minds have mutant powers.  what powers to processes have?
+ * spawn process (usually a lesser program)
+ 
+
+
+
+
+
+
+
+
+
+
+
 #################################################################
 TASKLIST
 
@@ -1397,7 +1372,7 @@ TASKLIST
 * fixed guardbot tameness bug
 * fixed wreck ilk merging bug
 * fixed coredump when enhancing armor while naked
-* "?" prompted indicated when appropriate
+* "?" prompt indicated when appropriate
 * rad grenades
 * radiation sterilizes monsters
 * slowed tribble reproduction rate
@@ -1407,36 +1382,243 @@ TASKLIST
 
 -- release_0_6_3 2005-07-13 (special private release)
 
-<== LAST CHECK IN
-
 * misc fixes to I->getStr
 * floppy disk labeled AAIO
 * selective fire for pulse rifle
+* footballs
+* lawyer monster (and powers)
+* you can look at message log when you die
+* ^C will no longer kill game in I->getstr
+* reduced effects of radiation poisoning
+
+-- 2009
+
+* monsters shouldn't zap player with healing ray gun!
+* fixed peril-sensitive sunglasses bug
+* floppy disk of hypnosis should cause sleep not paralysis
+* bug sensing only works on objects in Hero's square 
+* changed weapon descriptions
+* Fight.cpp & MonsterAI.cpp  seem to check for asleep but not paralyzed hero
+* combat more likely to awaken hero
+* can blindly attack '0'
+* don't render special effects when blind 
+* when blind, use vague name when describing enemy weapon use
+* ghost monster shows up as '0'blip  but can't be attacked
+* fixed grammar: "you spot a acid pit trap" 
+* monsters have gender
+* cylon centurion  (fixed spelling)
+* show armor, implants, weapon commands '[' '+' ')'
+* toggle autopickup command '@'
+* set armor glyph to '[' instead of ']'
+* fix memory leak in shMenu (thanks, Friedrich, for the bug report)
+* sessile monsters won't start moving when stunned or confused
+* sessile monsters can't escape traps
+* god mode 'create feature' command
+* bind uninstall command to 'R' instead of 'U'
+* unbind 'K'
+* capitalized VI keys for gliding
+* better help for VI keys (mention options menu)
+* grammar fix: "you find a acid pit trap"
+* "the anal probe corrodes" message when monster falls into acid
+* improved options menu
+* increased restoration stat repair from 1d4 to 2d4 
+* UI should use all available rows for menus, not just the first 25
+* improved menus with more nethack keybindings such as '@', '$', '?', etc. commands
+* increased alien gestation time 
+* "quick pick" lists of letters are condensed
+* "fadelog" option darkens old log lines instead of clearing them
+* interesting special effects of cloud of viruses, traffic, etc
+* robot town: hospital with docbot
+* alien princess and chestburster monsters
+* shopkeepers check the bill as well as your inventory when you leave the shop
+* obj intrinsics divided into worn/wielded/active/carried 
+* adjust canister prices
+* shopkeeper gets mad when you use a portable hole in its shop
+* fixed various weirdness when leaving shops
+* can't use lockpick/keycard to find secret doors
+* made tribbles more likely to multiply
+* energy cells are now their own object class with '*' glyph
+* sewer code
+* FOV corner peeking
+* monsters that can hide under features and objects
+* mimic monsters: T-1000
+* ratbots
+* beer removes fear, confusion provides fear immunity
+* improve lighting/darkness code
+* ctrl-N for name command
+* sewage is terrain type, not feature
+* further fixes to peril-sensing and spotting code
+* beams affect objs on ground
+* gauss ray blanks disks
+* trash compactor
+* drowning
+* don't displace pets if you're trapped
+* mainframe level
+* fake orgasmatrons
+* repeat letters when picking up items from huge stacks on ground.
+* the(), an(), etc. functions return a buffer now instead of caller having to 
+  deal with that
+* shoot locks off, repair broken locks
+* can't kick adjacent things while you're in a pit
+* brain cylinder
+* reflection for real
+* log XL in logfile, not just title 
+* mi-go, brain extraction
+* Dalek 'D'  shield
+* b: barrel, smart bomb, smart missile
+* ! brain in a jar: drink for gain Int 
+* sessile pets
+* animations for blaster bolt
+* refactor ranged weapons code
+* "web" mutant power
+* better stairs placement
+* magnetically sealed doors
+* fixed some compactor bugs
+* BOFH
+* retina scanner doors and Eye of the BOFH
+* changed implant sites
+* mi-go makes an incision before extracting brain
+* night vision goggles
+* stormtrooper helmet hurts aim
+* radspider bite might confer web mutant power
+* grammar: "Its floppy disk labeled AAIO melts!  You hit the usenet troll!"
+* reduce radspider, radscorpion poison damage
+* lawyer summon witness spell
+* traps in sewer levels 
+* sewer is smelly
+* fixed vision after closing a door.  
+* unable to create window bug (too wide)
+* more debug/diagnostic output
+* shopkeepers only buy items for 1/10 value
+* space marine gets +1 flak jacket instead of +1 pulse rifle
+* monster AI improvements
+* monsters have more HP
+* fixed shield bug
+* energy cells, some armor are lighter
+* radiation suit and power plant guaranteed in sewer plant
+* mutagen and gamma ray gun are radioactive
+* monsters less likely to hit each other with ranged weapons
+* warp-type monsters attracted to transporting hero
+* sewers populated with objects; likely to be dark
+* cockroaches immune to drowning (mythbusters)
+* monsters have more skills and HP
+* droid caller device
+* janitor
+* alarmed doors
+* fix optimized enhance implant message when already at +5
+* tazer->cattle prod, new: chainsaw
+* keycards automatically be prompted for when opening doors
+* space marine armor
+* skills advanced at will
+* print nevermind message when dismissing menu
+* adjust doors visibility in dark room
+* space elves
+* rail slug keeps moving
+* shotgun does more damage at close range, more likely to hit at long range
+* laser weapons work against locks
+* fewer objs in dungeon, but more in closets (with alarms)
+* janitor "disguise"
+* monsters attack more quickly
+* nunchucks
+* win32 build
+
+<== LAST CHECK IN
+
+* "less contaminated" message when not purified
 
 <== TESTED
-
 <=== JUST FINISHED
        STILL TO DO TODO ===>
 
+* daggers should stack
+* auto pickup of thrown football 
+* displacing pets doesn't always work?
+* logic bomb (what does it do?)
+* "foo is unaffected" message when monster in acid pit trap
+* clerkbot should use short descriptions of items
+* aquamarine / mean green power armor
+* look command shows features instead of creatures (at least with x-ray vision)
+* the radscoprtion frees himself from the strange feature (deep spot)
+* double charged by shopkeeper for quaffing unpaid obj
+* fake orgasmatrons, armor and weapons too highly priced
+* bad guys too easy
+* melee swords seem too powerful
+* stuff is too heavy
+* melee damage seems really high
+* trenchcoat (enchanment provides Cha boost)
+* can of bug spray
+* pet droids should use ranged weapons
+* opening/closing doors should trigger motion tracker
+* motion tracker works while blind... is this what I want?
+* '\' known command
+* fix profession titles advancement
 
+* need a dodgemesg() func (similar to beamhitsmsg())
+
+* floppy disk of Duke Nukem Forever
+* Y yithian?
+* d flying polyp  flying spaghetti monster  
+* W wookiee
+
+* apply brain cylinder (maybe like restraining bolt to make cyborg pet?)
+
+* print "you kill foo" instead of "you hit foo" "foo is killed" (this is hard)
+
+* kick machinery / moving wall  / other features
+
+* allow pits to be dug in garbage compactor (need to resolve problem of
+  two features in same grid first)
+
+* canister pricing bug
+
+* tone down acid pits?
+
+* 'n' to repeat a command N times
+
+* healing potions should fix "sickened" condition
+
+
+* earn xp for finding secrets, spotting traps, etc?
+* monster groups (klingon captain with klingon retinue)
+* "You can't see that location from here."  But should be able report what is
+  remembered!
+
+* level description file format
+* buggy diagnostics disk should omit some data ; optimized should do a better job?
 
 * exchange weapons key
+* wield two one-handed weapons 
+* duct tape two weapons together?  (bayonet)
+* pistols as close combat weapon
 * tweak speed system: monsters with more energy should go before player?
-
 * reorganize inventory more often (like after optimizing/debugging/identifying)
-
-* special level description file format
-* should be able to look at message log when you die
-* hallucination
-* maybe let floppies have charges after all?
-*
 * backdoor into town
 * "killed by a segmentation fault"
-* "the anal probe corrodes" message when monster falls into acid
+
+* chainsword
+* shield is still hokey
+
+* cloning machine / raygun
+
+* 'r'eload command (same as quiver in nh)
+
+* coffee canister (sleep immunity)
+* get rid of nano-cola?
+
+* should pulse rifle have integrated grenade launcher??
+
 * maybe get rid of energy cells altogether and just have different power plants?
-* take advantage of large screens to display more info at once
 * strong monsters should smash doors down
-* Lawyer monster
+* faraday effect should protect equipment from electricity 
+* don't eject implants when wearing a helmet: destroy them!
+* disintegration beam should work on walls
+* revamp skill system
+* tac nuke (clears whole level?)
+* thermal detonator
+* space orks can use buggy gear
+* power claw
+* revisit armor bonuses
+
 
 
 * monster mutant powers:
@@ -1453,13 +1635,6 @@ TASKLIST
     warbot
     alien warrior
     ork
-
-* "virtual" monsters
-
-    p grid bug    
-    v virus
-    U daemons
-    p recognizer
 
 * ranged weapons like angband.  launcher has a multiplier / num shots
     * bullets (d8)
@@ -1496,9 +1671,7 @@ TASKLIST
 * transporter ray should transport objects as well as creatures
 * make sure I got base initializers everywhere!
 
-* bugsensing only kicks in after you've held on to an item for a while
 * randomize keycard colors
-* keycards should automatically be prompted for when opening doors
 * orb of savescumming artifact
 * better error recovery on save/load
 * lockfile on highscore, logfile
@@ -1510,22 +1683,15 @@ TASKLIST
 * xray vision should penetrate blindfold
 * boots, gloves, other types of armor
 * fix "things that are here" overflow
-* better redraws for special effects
 * figure out ^Q, ESC key problems
 * more mutant powers 
 * feature to record and playback games
 * code cleanup
 * alarmed doors
 * implant for guided transportation
-* monsters with passive attacks (aliens should have acid for blood)
-* monsters with ranged attacks
 * making noise (kicking doors) should alert monsters (see makeNoise())
-* options menu
-* fix killed by a ray message, should say what kind of ray, and it could
-  even be a grenade
 * default skills should be selected for newbie
 * more ways to escape jetpack
-* UI should use all available rows for menus, not just the first 25
 * a better way to detect bugs is needed!!
 * log more stuff to debug log.  such as all the output in the message window
 * compress save files (zlib? gzip?)
@@ -1537,9 +1703,43 @@ TASKLIST
     klingon - 
     cyborg -  +2 natural armor, +2 str, -10 speed
     program -
+* too much teleportation should have consequences... warp rift? gate in demons?
+* earn XP for finding secret stuff?
+* named implants should appear with description
+
+* mainframe computer that's too heavy to pick up
+
+* "your shot misses something" - should be no message
+
+* Zombie process monster which can't be killed until parent is destroyed
+  - monsters spawned by others record parent id
+  - processes can be buggy
+  - process can't be derezzed if parent process is paralyzed or buggy
+  "The mail daemon is zombified!"
+  zombie is indestructible except with silver weapons 
+
+* silver bullets
+
+* more monster spellcasters (lawyer?)
+* process spellcasters 
+
+* floppy disk of spawn process (creates flying toasters)
+
+* get rid of genestealers (they're just aliens anyway)
+
+* security droid
+
+* built up poison resistance through repeated exposure
+
+* grammar: "killed by an usenet troll", "killed by a explosion"
 
 
 FUTURE VERSIONS
+
+* red pill
+* hallucination
+
+* simplify to 4 abilities:  Str / Agi / Int / Cha
 
 * ultima 4 style alignment system?
 * bfg 9000  uses 100 energy cells, but wipes out everything in LOS
@@ -1550,7 +1750,7 @@ FUTURE VERSIONS
 * use energy cells for melee weapons (tazer, light saber)
 * munchkin character generator?
 * grenade launcher mode for pulse rifle
-* stun setting for blaster?
+* stun setting for blaster / phaser?
 * mutagen should result in a polymorphing effect; rename mutagen as 
     radioactive waste
 * fix the damn monster AI
@@ -1569,7 +1769,8 @@ FUTURE VERSIONS
 * dreadnaughts
 * tractor beam
 * canister of whoop-ass
-* reflection for real
 
 * Total Perspective Vortex (Restaurant at the End of the Universe p187)
 * energon cube
+
+* invisibility belt

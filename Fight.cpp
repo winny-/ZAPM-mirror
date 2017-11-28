@@ -3,7 +3,9 @@
 
 ****************************************************************/
 
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include "Global.h"
 #include "Util.h"
@@ -11,12 +13,13 @@
 #include "Interface.h"
 
 static shSpecialEffect
-beamSpecialEffect (shAttack *atk)
+beamSpecialEffect (shAttack *atk, shDirection dir)
 {
     switch (atk->mType) {
     case shAttack::kHeatRay:    
-    case shAttack::kBlast:
     case shAttack::kBreatheFire:
+        return kHeatEffect;
+    case shAttack::kBlast:
         return kExplosionEffect;
     case shAttack::kFlash:
         return kRadiationEffect;
@@ -24,11 +27,32 @@ beamSpecialEffect (shAttack *atk)
         return kColdEffect;
     case shAttack::kPoisonRay: 
         return kPoisonEffect;
-    case shAttack::kBreatheTime:
-    case shAttack::kBreatheTraffic:
-    case shAttack::kBreatheBugs:
-    case shAttack::kBreatheViruses:
     case shAttack::kDisintegrationRay: 
+        return kDisintegrationEffect;
+    case shAttack::kBreatheTraffic:
+         return kBinaryEffect;
+    case shAttack::kBreatheBugs:
+         return kBugsEffect;
+    case shAttack::kBreatheViruses:
+         return kVirusesEffect;
+    case shAttack::kLaser: 
+    case shAttack::kBolt:
+        switch (dir) {
+        case kNorthWest: case kSouthEast: return kLaserBeamBDiagEffect;
+        case kSouthWest: case kNorthEast: return kLaserBeamFDiagEffect;
+        case kEast: case kWest: return kLaserBeamHorizEffect;
+        case kNorth: case kSouth: return kLaserBeamVertEffect;
+        case kOrigin: default: return kLaserBeamEffect;
+        }
+    case shAttack::kRail:
+        switch (dir) {
+        case kNorthWest: case kSouthEast: return kRailBDiagEffect;
+        case kSouthWest: case kNorthEast: return kRailFDiagEffect;
+        case kEast: case kWest: return kRailHorizEffect;
+        case kNorth: case kSouth: return kRailVertEffect;
+        case kOrigin: default: return kRailEffect;
+        }
+    case shAttack::kBreatheTime:
     case shAttack::kGammaRay:
     case shAttack::kGaussRay:
     case shAttack::kTransporterRay:
@@ -36,7 +60,7 @@ beamSpecialEffect (shAttack *atk)
     case shAttack::kHealingRay:
     case shAttack::kRestorationRay:
     default:
-        return kInvisibleEffect;
+        return kNone;
     }
 }
 
@@ -46,7 +70,7 @@ beamHitsMesg (shAttack *atk)
 {
     switch (atk->mType) {
     case shAttack::kBlast: return NULL; /*"The blast hits";*/
-    case shAttack::kBreatheFire: return "The fireball hits";
+    case shAttack::kBreatheFire: return "The fire engulfs";
     case shAttack::kBreatheBugs: return "The cloud of bugs envelopes";
     case shAttack::kBreatheViruses: return "The cloud of viruses envelopes";
     case shAttack::kBreatheTime: return "The time warp envelopes";
@@ -81,15 +105,16 @@ monHitsYouMesg (shAttack *atk)
     case shAttack::kBlast: return " blasts you";
     case shAttack::kBullet: return " shoots you";
     case shAttack::kBolt: return " blasts you";
-    case shAttack::kCease: return " reads a cease and desist letter to you";
     case shAttack::kClaw: return " claws you";
     case shAttack::kClub: return " clubs you";
     case shAttack::kChoke: return " chokes you";
     case shAttack::kCook: return " cooks you";
     case shAttack::kCrush: return " crushes you";
+    case shAttack::kCut: return " cuts you";
     case shAttack::kDisintegrationRay: 
         return " zaps you with a disintegration ray";
-    case shAttack::kExtractBrain: return " extracts your brain";
+    case shAttack::kExtractBrain: 
+        return NULL;
     case shAttack::kFaceHug: return " attacks your face";
     case shAttack::kFlash: return " blasts you with a bright light";
     case shAttack::kFreezeRay: return " zaps you with a freeze ray";
@@ -100,13 +125,13 @@ monHitsYouMesg (shAttack *atk)
     case shAttack::kHeatRay: return " zaps you with a heat ray";
     case shAttack::kKick: return " kicks you";
     case shAttack::kLaser: return " zaps you with a laser beam";
+    case shAttack::kLegalThreat: return " raises an objection";
     case shAttack::kMentalBlast: return " blasts your mind";
     case shAttack::kPoisonRay: return "zaps you with a poison ray";
     case shAttack::kPunch: return " punches you";
-    case shAttack::kQuill: return " quills you";
+    case shAttack::kQuill: return " sticks you with a quill";
     case shAttack::kRail: return " rails you";
     case shAttack::kRestorationRay: return " zaps you with a restoration ray";
-    case shAttack::kSeize: return " rifles through your pack";
     case shAttack::kShot: return " shoots you";
     case shAttack::kSlash: return " slashes you";
     case shAttack::kSlime: return " slimes you";
@@ -114,7 +139,6 @@ monHitsYouMesg (shAttack *atk)
     case shAttack::kStab: return " stabs you";
     case shAttack::kStasisRay: return " zaps you with a stasis ray";
     case shAttack::kSting: return " stings you";
-    case shAttack::kSue: return " sues you";
     case shAttack::kSword: return " slices you";
     case shAttack::kTailSlap: return "'s tail whips you";
     case shAttack::kTouch: return " touches you";
@@ -136,12 +160,12 @@ monHitsMonMesg (shAttack *atk)
     case shAttack::kBlast: return " blasts";
     case shAttack::kBullet: return " shoots";
     case shAttack::kBolt: return " blasts";
-    case shAttack::kCease: return " reads a cease and desist letter to";
     case shAttack::kClaw: return " claws";
     case shAttack::kClub: return " clubs";
     case shAttack::kChoke: return " chokes";
     case shAttack::kCook: return " cooks";
     case shAttack::kCrush: return " crushes";
+    case shAttack::kCut: return " cuts";
     case shAttack::kDisintegrationRay: return " zaps a disintegration ray at";
     case shAttack::kExtractBrain: return " extracts the brain of";
     case shAttack::kFaceHug: return " attacks the face of";
@@ -160,7 +184,6 @@ monHitsMonMesg (shAttack *atk)
     case shAttack::kQuill: return " quills";
     case shAttack::kRail: return " rails";
     case shAttack::kRestorationRay: return " zaps a restoration ray at";
-    case shAttack::kSeize: return " rifles through the pack of";
     case shAttack::kShot: return " shoots";
     case shAttack::kSlash: return " slashes";
     case shAttack::kSlime: return " slimes";
@@ -168,18 +191,25 @@ monHitsMonMesg (shAttack *atk)
     case shAttack::kStab: return " stabs";
     case shAttack::kStasisRay: return " zaps a stasis ray at";
     case shAttack::kSting: return " stings";
-    case shAttack::kSue: return " sues";
     case shAttack::kSword: return " slices";
     case shAttack::kTailSlap: return "'s tail whips";
     case shAttack::kTouch: return " touches";
     case shAttack::kTransporterRay: return " zaps a transporter ray at";
     case shAttack::kZap: return " zaps";
     }
-    return "hits you";
+    return " hits";
 }       
 
 
-
+static shDirection
+reflectBackDir (shDirection dir) {
+    dir = uTurn (dir);
+    switch (RNG (4)) {
+    case 0: return leftTurn (dir); 
+    case 1: return rightTurn (dir);
+    default: return dir;
+    }
+}
 
 
 /* returns: the bonus to AC afforded by the supplied cover percentage */
@@ -220,6 +250,8 @@ VisibilityMiss (int vis)
         else { misschance = 50; }
 
         if (RNG (100) < misschance) {
+            I->diag ("visibility miss! (chance was %d%%)", misschance); 
+
             return 1;
         }
     }
@@ -236,7 +268,7 @@ shCreature::reflexSave (shAttack *attack, int DC)
 {
     int result = RNG (1, 20) + mReflexSaveBonus + ABILITY_MODIFIER (getAgi ());
 
-    if (isAsleep ()) {
+    if (isAsleep () || isSessile ()) {
         return 0;
     }
     if (Hero.isLucky ()) {
@@ -266,12 +298,10 @@ shCreature::attackRoll (shAttack *attack, shObject *weapon,
     int dmul = 1;
     int threatrange = weapon ? weapon->getThreatRange (target) : 20;
     int critmult = weapon ? weapon->getCriticalMultiplier () : 2;
-    char buf[64];
+    const char *thetarget = target->the ();
     
-    target->the (buf, 64);
-
     if (1 == result) { /* rolling a 1 always results in a miss */
-        I->diag ("attacking %s: rolled a 1 against AC %d.", buf, AC); 
+        I->diag ("attacking %s: rolled a 1 against AC %d.", thetarget, AC); 
         return -99;
     }
     if (20 == result ||
@@ -286,38 +316,40 @@ shCreature::attackRoll (shAttack *attack, shObject *weapon,
             {   /* critical hit */
                 dmul = critmult;
                 I->diag ("attacking %s: rolled %d, then %d+%d=%d against "
-                         "AC %d: critical hit, damage multiplier %d!", 
-                         buf, result, threat, attackmod, threat + attackmod, 
-                         AC, dmul);
+                         "AC %d: critical hit, dmg mult %d!", 
+                         thetarget, result, threat, attackmod,
+                         threat + attackmod, AC, dmul);
             } else {
                 I->diag ("attacking %s: rolled %d, then %d+%d=%d against AC %d", 
-                         buf, result, threat, attackmod, threat + attackmod, AC);
+                         thetarget, result, threat, attackmod, 
+                         threat + attackmod, AC);
             }
         } else {
             I->diag ("attacking %s: rolled a %d+%d=%d against AC %d", 
-                     buf, result, attackmod, result + attackmod, AC);
+                     thetarget, result, attackmod, result + attackmod, AC);
         }
         return dmul;
     }
     I->diag ("attacking %s: rolled a %d+%d=%d against AC %d",
-             buf, result, attackmod, result + attackmod, AC);
+             thetarget, result, attackmod, result + attackmod, AC);
     return result + attackmod - AC;
 }
 
 
+/* determine if a ranged attack hits.
+   returns: -x for a miss (returns amount missed by)
+             1 for a hit
+             2+ for a critical hit (returns damage multiplier)
+   modifies: adds calculated damage bonuses to *dbonus
+ */
 
-/* works out the ranged attack against the target
-   returns: 1 if the target is eliminated (e.g. it dies, teleports away, etc.)
-            0 if the target is hit but not eliminated
-           -1 if the attack was a complete miss
-           -2 if the attack was reflected
-*/
 
 int
-shCreature::resolveRangedAttack (shObject *weapon,
-                                 shAttack *attack,
-                                 int attackmod,
-                                 shCreature *target)
+shCreature::rangedAttackHits (shAttack *attack,
+                              shObject *weapon,
+                              int attackmod,
+                              shCreature *target,
+                              int *dbonus)
 {
     int AC;
     int flatfooted = 0;   /* set to 1 if the target is unable to react to the
@@ -325,59 +357,16 @@ shCreature::resolveRangedAttack (shObject *weapon,
     int cover;
     int vis;
 
-    char n_attacker[64];
-    char an_attacker[64];
-    char n_target[64];
-    char n_weapon[64];
-
     int range = distance (target, this);
     int wrange = attack->mRange;
     int maxrange;
 
-    int dbonus = 0;
-    int dmul = -1;
+    *dbonus += mDamageModifier;
 
-    int cantsee = 1;
-
-    if (isHero ()) {
-        strcpy (n_attacker, "you");
-        cantsee = 0;
-    } else if (Hero.canSee (this)) {
-        the (n_attacker, 64);
-        cantsee = 0;
-    } else {
-        strcpy (n_attacker, "something");
-    }
-    if (target->isHero ()) {
-        strcpy (n_target, "you");
-        cantsee = 0;
-    } else if (Hero.canSee (target)) {
-        target->the (n_target, 64);
-        cantsee = 0;
-    } else {
-        strcpy (n_target, "something");
-    }
-
-    an (an_attacker, 64);
-
-/* this message is confusing
-    if (cantsee) {
-        I->p ("You hear the sounds of combat.");
-    }
-*/
     if (weapon) {
-        weapon->the (n_weapon, 64);
-        dbonus = weapon->mEnhancement;
+        *dbonus += weapon->mEnhancement;
         attackmod += ((shWeaponIlk *) weapon->mIlk) -> mToHitBonus;
-        if (mGoggles && mGoggles->isA ("pair of targetter goggles")) {
-            attackmod += 2;
-            dbonus += 2;
-        }
-    } else if (&OpticBlastAttack == attack) {
-        strcpy (n_weapon, "the laser blast");
-    } else {
-        strcpy (n_weapon, "it");
-    }
+    } 
 
     if (!attack->isMeleeAttack () && 
         target->hasShield () &&
@@ -388,7 +377,7 @@ shCreature::resolveRangedAttack (shObject *weapon,
     } else if (target->mConcealment && RNG (100) < target->mConcealment) {
         /* should telepathy counter concealment? */
         I->debug ("missed due to concealment");
-        goto youmiss;
+        return -20;
     }
 
     vis = canSee (target, &cover);
@@ -406,19 +395,27 @@ shCreature::resolveRangedAttack (shObject *weapon,
             //FIX: assess stiff penalties for large or impractical missiles
         }
     } else {
-        /* some kind of aimed weapon or a psionic attack */
         maxrange = 10 * wrange;
-        attackmod += getWeaponSkillModifier (weapon ? weapon->mIlk : NULL);
-        if (weapon) {
+        if (!weapon) { 
+            /* psionic or innate attack - caller should have already
+               added relevant skill bonus to attackmod */
+        } else if (weapon->isA (kRayGun)) {
+            attackmod += mBAB + 4; /* ray guns are normally pretty reliable */
+            attackmod += mToHitModifier;
+            maxrange = 99999;      /* range checking handled by beam code */
+            if (weapon->isOptimized ()) {
+                attackmod += 2;
+            }
+        } else {
+            attackmod += getWeaponSkillModifier (weapon->mIlk);
             attackmod += weapon->mEnhancement;
             attackmod -= 2 * weapon->mDamage;
             if (weapon->isOptimized ()) {
                 attackmod += 2;
             }
-        }
+        } 
     }
 
-    
     if (0 == target->canSee (this)) {
         attackmod += 2;
         flatfooted = 1;
@@ -427,16 +424,23 @@ shCreature::resolveRangedAttack (shObject *weapon,
         flatfooted = 1;
         attackmod += 2;
     }
-    if (target->isAsleep ()) {
+    if (target->isAsleep () || target->isParalyzed () || 
+        target->isSessile ()) 
+    {
         flatfooted = 1;
         attackmod += 4;
     }
         
     if (range > maxrange) { 
-        goto youmiss;
+        return -20;
     }
 
-    attackmod -= 2 * (range / wrange);
+    if (shAttack::kShot == attack->mType) {
+        attackmod += 2 * (range / wrange);
+        *dbonus -= 4 * (range / wrange);
+    } else {
+        attackmod -= 2 * (range / wrange);
+    }
 
     if (attack->isTouchAttack ()) {
         AC = target->getTouchAC (flatfooted, this);
@@ -446,40 +450,98 @@ shCreature::resolveRangedAttack (shObject *weapon,
     if (cover >= 100) {
         /* normally it would be impossible to see the target if there is
            100% cover, unless the cover is transparent (e.g. a window) */
-        goto youmiss;
+        return -20;
     } else {
         AC += CoverACBonus (cover);
     }
 
     if (VisibilityMiss(vis)) {
-        goto youmiss;
+        return -20;
     }
 
     /* roll to hit */
-    
-    dmul = attackRoll (attack, weapon, attackmod, AC, target);
+    return attackRoll (attack, weapon, attackmod, AC, target);
+}
+
+
+/* works out the ranged attack against the target
+   returns: 1 if the target is eliminated (e.g. it dies, teleports away, etc.)
+            0 if the target is hit but not eliminated
+           -1 if the attack was a complete miss
+           -2 if the attack was reflected
+*/
+
+int
+shCreature::resolveRangedAttack (shAttack *attack,
+                                 shObject *weapon,
+                                 int attackmod,
+                                 shCreature *target)
+{
+    const char *n_attacker;
+    const char *an_attacker;
+    const char *n_target;
+    const char *n_weapon;
+
+    int dbonus = 0;
+    int dmul = -1;
+
+    int cantsee = 1;
+
+    if (isHero ()) {
+        n_attacker = "you";
+        cantsee = 0;
+    } else if (Hero.canSee (this)) {
+        n_attacker = the ();
+        cantsee = 0;
+    } else {
+        n_attacker = "something";
+    }
+    if (target->isHero ()) {
+        n_target = "you";
+        cantsee = 0;
+    } else if (Hero.canSee (target)) {
+        n_target = target->the ();
+        cantsee = 0;
+    } else {
+        n_target = "something";
+    }
+
+    an_attacker = an ();
+    if (weapon) {
+        n_weapon = weapon->theQuick ();
+    } else if (&OpticBlastAttack == attack) {
+        if (isHero ()) 
+            n_weapon = "your laser beam"; 
+        else 
+            n_weapon = "the laser blast";
+    } else {
+        n_weapon = "it";
+    }
+
+    /* work out hit/miss */
+    dmul = rangedAttackHits (attack, weapon, attackmod, target, &dbonus);
     
     if (dmul <= 0) {
-        //FIX: determine if the attack hit armor or just plain missed
+        //FIXME: determine if the attack hit armor or just plain missed
         dmul = -1;
         goto youmiss;
     }
 
     /* successful hit */
+    if (target->mHidden) {
+        target->revealSelf ();
+    }
 
     if (attack->isMissileAttack () && weapon) {
         //I->p ("%s is hit!", n_target);
+        exerciseWeaponSkill (weapon, 1);
         weapon->impact (target, 
                         vectorDirection (mX, mY, target->mX, target->mY),
                         this);
-        exerciseWeaponSkill (weapon, 1);
         return 0;  /* FIX */
     }
 
-    if (target->reflectAttack (attack)) {
-        return -2;
-    }
-    if (isHero ()) {
+    if (isHero () &&!target->isHero ()) {
         if (dmul > 1) {
             I->p ("You hit %s!", n_target);
         } else {
@@ -491,7 +553,7 @@ shCreature::resolveRangedAttack (shObject *weapon,
             exerciseWeaponSkill (weapon, 1);
         }
         if (target->sufferDamage (attack, this, dbonus, dmul)) {
-            I->p ("%s is %s!", n_target, target->deathVerb ());
+            target->pDeathMessage (n_target, kSlain);
             if (!target->isHero ()) {
                 Hero.earnXP (target->mCLevel);
             }
@@ -516,9 +578,8 @@ shCreature::resolveRangedAttack (shObject *weapon,
         return 0;
     } else {
         if (target->sufferDamage (attack, this, dbonus, dmul)) {
-            if (!cantsee) {
-                I->p ("%s is %s!", n_target, target->deathVerb ());
-            }
+            if (!cantsee) 
+                target->pDeathMessage (n_target, kSlain);
             target->die (kSlain);
             return 1;
         } else if (dmul > 1) {
@@ -543,23 +604,23 @@ shCreature::resolveRangedAttack (shObject *weapon,
         if (target->isHero ()) {
             I->p ("%s misses you!", n_weapon);
         } else {
-            I->p ("%s misses %s", n_weapon, n_target);
+            I->p ("%s misses %s.", n_weapon, n_target);
         }
     } else if (&OpticBlastAttack == attack) {
-        if (isHero () && target->mHidden <= 0) {
-            I->p ("Your laser beam misses %s.", n_target);
-        } 
+        //if (isHero () && target->mHidden <= 0) {
+        //    I->p ("Your laser beam misses %s.", n_target);
+        //} 
     } else {
-        if (isHero () && target->mHidden <= 0) {
-            I->p ("Your shot misses %s.", n_target);
-        } 
-/* 
-          else if (target->isHero ()) {
-            I->p ("%s misses.", n_attacker);
-        } else {
-            I->p ("%s misses %s", n_attacker, n_target);
+        if (kNone == beamSpecialEffect (attack, kOrigin)) {
+            if (isHero () && target->mHidden <= 0 && canSee (target)) {
+                I->p ("You miss %s.", n_target);
+            } /* else if (target->isHero ()) {
+                I->p ("%s misses.", n_attacker);
+            } else {
+                I->p ("%s misses %s", n_attacker, n_target);
+            } */
         }
-*/
+
     }
     target->interrupt ();
     target->newEnemy (this);
@@ -574,13 +635,15 @@ shCreature::resolveRangedAttack (shObject *weapon,
 int
 shCreature::shootWeapon (shObject *weapon, shDirection dir)
 {
-    int numrounds;
+    int numrounds = 0;
     int x, y;
     int firsttarget = 1;
-    shAttack *attack;
+    shAttack *attack = NULL;
     int setemptyraygun = 0;
 
     assert (weapon);
+
+    Hero.interrupt ();
 
     if (weapon->isA (kWeapon)) {
         attack = & ((shWeaponIlk *) weapon->mIlk) -> mAttack;
@@ -617,21 +680,18 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
         int knownappearance = weapon->isAppearanceKnown ();
         weapon->setAppearanceKnown ();
         if (Hero.canSee (this)) {
-            char buf[80];
-            char buf2[80];
-            the (buf, 80);
-            weapon->her (buf2, 80, this);
-            I->p ("%s shoots %s!", buf, buf2);
+            I->p ("%s shoots %s!", the (), weapon->her (this));
         } else {
-            char buf2[80];
-            weapon->an (buf2, 80);
-            I->p ("You hear someone shooting %s.", buf2);
-            if (!knownappearance) {
-                weapon->resetAppearanceKnown ();
-            }
+            const char *a_weap = weapon->anVague (); 
             if (!Hero.isBlind () && Level->isInLOS (mX, mY)) {
                 /* muzzle flash gives away position */
+                I->p ("Someone shoots %s!", a_weap);
                 Level->feelSq (mX, mY);
+            } else {
+                I->p ("You hear someone shooting %s!", a_weap);
+            }
+            if (!knownappearance) {
+                weapon->resetAppearanceKnown ();
             }
         }
     } else if (!isBlind ()) {
@@ -653,9 +713,7 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
             if (isHero ()) {
                 I->p ("Your ray gun explodes!");
             } else if (Hero.canSee (this)) {
-                char buf[80];
-                the (buf, 80);
-                I->p ("%s's ray gun explodes!", buf);
+                I->p ("%s's ray gun explodes!", the ());
             } else {
                 I->p ("You hear an explosion");
             }
@@ -670,7 +728,8 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
             removeObjectFromInventory (weapon);
             delete weapon;
             attack->mEffect = shAttack::kBurst; 
-            died = mLevel->areaEffect(attack, mX, mY, kNoDirection, this);
+            died = mLevel->areaEffect(attack, NULL, mX, mY, kNoDirection, 
+                                      this, 0);
             attack->mEffect = shAttack::kBeam;
             return died ? -2 : 1000;
         }
@@ -679,9 +738,7 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
             weapon->setBugginessKnown ();
             I->p ("Your weapon misfires!");
         } else if (Hero.canSee (this)) {
-            char buf[80];
-            the (buf, 80);
-            I->p ("%s's weapon misfires!", buf);
+            I->p ("%s's weapon misfires!", the ());
             weapon->setBugginessKnown ();
         } else {
             I->p ("You hear a weapon misfire.");
@@ -715,7 +772,7 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
         if (-1 == numrounds) { /* pea shooter */
             numrounds = 1;
         }
-        
+
         while (numrounds--) {
             int timeout = 100;
             x = mX;
@@ -724,36 +781,90 @@ shCreature::shootWeapon (shObject *weapon, shDirection dir)
             while (Level->moveForward (dir, &x, &y) 
                    && --timeout) 
             {
+                shSpecialEffect eff = beamSpecialEffect (attack, dir);
+
+                if (eff && !Hero.isBlind ()) {
+                    Level->setSpecialEffect (x, y, eff);
+                    Level->drawSq (x, y);
+                }
+
                 if (Level->isOccupied (x, y)) {
                     shCreature *c = Level->getCreature (x, y);
-                    int maintarget = isHero () ? firsttarget : c->isHero (); 
-                    int r = resolveRangedAttack (weapon, attack,
-                                                 maintarget ? 0 : -4,
-                                                 Level->getCreature (x, y));
+                    int tohitmod = 0;
+                    if (!isHero () && !c->isHero ())
+                        tohitmod -= 8; /* avoid friendly fire */
+                    else if (!firsttarget)
+                        tohitmod -= 4;
+
                     firsttarget = 0;
-                    if (-2 == r) {
-                        /* 
-                        dir = uTurn (dir);
+                    if (c->reflectAttack (attack, &dir)) {
+                        Level->setSpecialEffect 
+                            (x, y, beamSpecialEffect (attack, kOrigin));
+                        I->pauseXY (Hero.mX, Hero.mY, 10);
+                        Level->setSpecialEffect (x, y, kNone);
                         continue;
-                        */
-                        break;
-                    } else if (r >= 0) {
+                    }
+
+                    int r = resolveRangedAttack (attack, weapon, tohitmod,
+                                                 Level->getCreature (x, y));
+                    if (r >= 0 && shAttack::kRail != attack->mType) {
+                        Level->setSpecialEffect (x, y, kNone);
                         break;
                     }
                 }
                 if (Level->isOcclusive (x, y)) {
-                    /* TODO: shoot the obstacle */
+                    shFeature *f = Level->getFeature (x, y);
+                    if (f) {
+                        switch (f->mType) {
+                        case shFeature::kDoorClosed:
+                        case shFeature::kDoorBerserkClosed:
+                            if (f->isMagneticallySealed ()) {
+                                if (kForce == attack->mDamage[0].mEnergy) {
+                                    I->p ("The %s bounces off the door!", 
+                                          attack->noun ());
+                                    dir = reflectBackDir (dir);
+                                    Level->setSpecialEffect (x, y, 
+                                        beamSpecialEffect (attack, kOrigin));
+                                    I->pauseXY (Hero.mX, Hero.mY, 10);
+                                    Level->setSpecialEffect (x, y, kNone);
+                                    continue;
+                                } else {
+                                    I->p ("Your shot hits a force field!");
+                                }
+                                break;
+                            }
+                            if (isHero () && f->isLockedDoor ()) {
+                                shootLock (weapon, attack, f);
+                            }
+                            break;
+                        default:
+                            /* TODO: shoot other types of features */
+                            break;
+                        }
+                    }
+                    Level->setSpecialEffect (x, y, kNone);
                     break;
+                }
+                if (eff) {
+                    if (timeout > 85 || firsttarget ||
+                        distance (x, y, Hero.mX, Hero.mY) < 40 ||
+                        !RNG (5))
+                    { /* trying not to pause too much */
+                        I->pauseXY (Hero.mX, Hero.mY, 5);
+                    }
+                    Level->setSpecialEffect (x, y, kNone);
                 }
             }
         }
         break;
     case shAttack::kBeam:
+    {
         if (Hero.canSee (this)) {
             weapon->setIlkKnown ();
         }
-        Level->areaEffect (attack, mX, mY, dir, this);
+        Level->areaEffect (attack, weapon, mX, mY, dir, this, 0);
         break;
+    }
     default:
         I->p ("Unkown weapon type!!");
         break;
@@ -783,9 +894,13 @@ shCreature::projectile (shObject *obj, int x, int y, shDirection dir,
 
         if (mLevel->isOccupied (x, y)) {
             shCreature *c = mLevel->getCreature (x, y);
-            int maintarget = isHero () ? firsttarget : c->isHero (); 
-            int r = resolveRangedAttack (obj, attack, maintarget ? 0 : -4, c);
-                                         
+            int tohitmod = 0;
+            if (!isHero () && !c->isHero ())
+                tohitmod -= 8; /* avoid friendly fire */
+            else if (!firsttarget)
+                tohitmod -= 4;
+
+            int r = resolveRangedAttack (attack, obj, tohitmod, c);
             firsttarget = 0;
             if (r >= 0) {
                 /* a hit - resolveRangedAttack will have called obj->impact */
@@ -855,11 +970,7 @@ shCreature::throwObject (shObject *obj, shDirection dir)
     }
 
     if (!isHero () && Hero.canSee (this)) {
-        char buf1[60], buf2[60];
-
-        the (buf1, 60);
-        obj->an (buf2, 60);
-        I->p ("%s throws %s!", buf1, buf2);
+        I->p ("%s throws %s!", the (), obj->anQuick ());
     }
 
     if (kUp == dir) {
@@ -891,13 +1002,47 @@ shHero::kick (shDirection dir)
     int x = mX;
     int y = mY;
     shFeature *f;
-    char buf[80];
 
     feel (x, y);
+
+    if (mLevel->isWatery (x, y)) {
+        I->p ("You slosh around uselessly.");
+        return HALFTURN;
+    }
 
     if (kUp == dir) {
         I->p ("You kick the air.");
         return FULLTURN;
+    }
+
+    if (mZ < 0) {
+        f = mLevel->getFeature (x, y);
+        if (f) {
+            switch (f->mType) {
+            case shFeature::kPit:
+                I->p ("You kick the pit wall!");
+                if (sufferDamage (&KickedWallDamage)) 
+                    die (kKilled, "kicking a pit wall");
+                return FULLTURN;
+            case shFeature::kAcidPit:
+                I->p ("Your useless kick splashes acid everywhere.");
+                if (sufferDamage (&AcidPitTrapDamage)) {
+                    die (kMisc, "Dissolved in acid");
+                }
+                return FULLTURN;
+            case shFeature::kSewagePit:
+                I->p ("You slosh around uselessly.");
+                return FULLTURN;
+            default:
+                I->p ("UNEXPECTED: don't know how to handle kick from here.");
+                I->p ("(Please file a bug report!)");
+                return 0;
+            }
+        } else {
+            I->p ("UNEXPECTED: don't know how to handle kick from here.");
+            I->p ("(Please file a bug report!)");
+            return 0;
+        }
     }
 
     if (!mLevel->moveForward (dir, &x, &y)) {
@@ -905,21 +1050,33 @@ shHero::kick (shDirection dir)
     } else if (kDown != dir && mLevel->isOccupied (x, y)) {
         shCreature *c = Level->getCreature (x, y);
         /* treat as unarmed attack */
-        resolveMeleeAttack (NULL, mIlk->mAttacks.get (0), c);
+        resolveMeleeAttack (mIlk->mAttacks.get (0), NULL, c);
     } else if (mLevel->countObjects (x, y)) {
-        shObjectVector *v = mLevel->getObjects (x, y);
-        shObject *obj = v->get (0);
-        int maxrange = maxi (2, ABILITY_MODIFIER (getStr ()) + NDX (2, 4));  
+        int maxrange = ABILITY_MODIFIER (getStr ()) + NDX (2, 4);
+        shObject *obj;
+        shAttack *atk;
+        int dbonus = 0;
+        
+        obj = mLevel->removeObject (x, y, "football");
+        if (obj) {
+            atk = &KickedFootballAttack;
+            dbonus = ABILITY_MODIFIER (getStr ());
+            dbonus += obj->mEnhancement;
+        } else {
+            shObjectVector *v = mLevel->getObjects (x, y);
 
-        v->remove (obj);
-        if (0 == v->count ()) {
-            delete v;
-            mLevel->setObjects (x, y, NULL);
+            obj = v->get (0);
+            v->remove (obj);
+            if (0 == v->count ()) {
+                delete v;
+                mLevel->setObjects (x, y, NULL);
+            }
+            atk = &ImprovisedMissileAttack;
+            maxrange = maxi (2, maxrange);
         }
-        obj->the (buf, 80);
 
         if (kDown == dir) {
-            I->p ("You stomp on %s.", buf);
+            I->p ("You stomp on %s.", obj->theQuick ());
             if (obj->isUnpaid ()) {
                 usedUpItem (obj, obj->mCount, "kick");
                 obj->resetUnpaid ();
@@ -930,7 +1087,7 @@ shHero::kick (shDirection dir)
                 usedUpItem (obj, obj->mCount, "kick");
                 obj->resetUnpaid ();
             }
-            projectile (obj, x, y, dir, &ImprovisedMissileAttack, maxrange);
+            projectile (obj, x, y, dir, atk, maxrange);
         }
     } else if ((f = mLevel->getFeature (x, y))) {
         int score = 
@@ -959,6 +1116,12 @@ shHero::kick (shDirection dir)
             break;
         case shFeature::kDoorBerserkClosed:
         case shFeature::kDoorClosed:
+            if (f->isMagneticallySealed ()) {
+                I->p ("Your kick a force field!  Ow!");
+                if (sufferDamage (&KickedWallDamage)) 
+                    die (kKilled, "kicking a magnetically sealed door");
+                break;
+            }
             score += f->mSportingChance;
             f->mSportingChance += RNG (1, 3);
             if (score >= (shFeature::kLocked & f->mDoor ? 22 : 20)) {
@@ -977,6 +1140,10 @@ shHero::kick (shDirection dir)
                     die (kKilled, "kicking a door");
                 }
             }
+            if (f->isAlarmedDoor ()) {
+                I->p ("You set off an alarm!");
+                Level->doorAlarm (f);
+            }
             break;
             
         case shFeature::kComputerTerminal:
@@ -986,8 +1153,7 @@ shHero::kick (shDirection dir)
         case shFeature::kRadTrap:
         case shFeature::kVat:
         case shFeature::kMaxFeatureType: 
-            f->the (buf, 80);
-            I->p ("You kick %s!", buf);
+            I->p ("You kick %s!", f->the ());
             if (sufferDamage (&KickedWallDamage)) {
                 die (kKilled, "kicking an obstacle");
             }
@@ -1020,8 +1186,8 @@ shHero::kick (shDirection dir)
 */
 
 int
-shCreature::resolveMeleeAttack (shObject *weapon,
-                                shAttack *attack,
+shCreature::resolveMeleeAttack (shAttack *attack,
+                                shObject *weapon,
                                 shCreature *target)
 {
     int attackmod;
@@ -1031,33 +1197,33 @@ shCreature::resolveMeleeAttack (shObject *weapon,
     int cover;
     int vis;
 
-    char n_attacker[64];
-    char an_attacker[64];
-    char n_target[64];
+    const char *n_attacker;
+    const char *an_attacker;
+    const char *n_target;
 
-    int dbonus;
-    int dmul;
+    int dbonus = 0;
+    int dmul = 0;
     int cantsee = 1;
 
     if (isHero ()) {
-        strcpy (n_attacker, "you");
+        n_attacker = "you";
         cantsee = 0;
     } else if (Hero.canSee (this)) {
-        the (n_attacker, 64);
+        n_attacker = the ();
         cantsee = 0;
     } else {
-        strcpy (n_attacker, "something");
+        n_attacker = "something";
     }
     if (target->isHero ()) {
-        strcpy (n_target, "you");
+        n_target = "you";
         cantsee = 0;
     } else if (Hero.canSee (target)) {
-        target->the (n_target, 64);
+        n_target = target->the ();
         cantsee = 0;
     } else {
-        strcpy (n_target, "something");
+        n_target = "something";
     }
-    an (an_attacker, 64);
+    an_attacker = an ();
 
     if (target->mConcealment && RNG (100) < target->mConcealment) {
         I->debug ("missed due to concealment");
@@ -1093,11 +1259,18 @@ shCreature::resolveMeleeAttack (shObject *weapon,
                 dbonus += ABILITY_MODIFIER (getStr ());
             }
         } else {
-            /* improvised melee weapon */
-            attackmod = ABILITY_MODIFIER (getStr ()) - 4;
-            attackmod -= 2 * weapon->mDamage;
-            dbonus = ABILITY_MODIFIER (getStr ()) / 2;
-            dbonus -= weapon->mDamage;
+            if (weapon->isA (kWeapon)) {
+                /* e.g. pistol whipping, use unarmed combat skill */
+                attackmod = getWeaponSkillModifier (NULL);
+                attackmod += weapon->mEnhancement;
+                attackmod -= 2 * weapon->mDamage;
+                dbonus = ABILITY_MODIFIER (getStr ());
+            } else {
+                /* improvised melee weapon */
+                attackmod = ABILITY_MODIFIER (getStr ()) - 4;
+                dbonus = ABILITY_MODIFIER (getStr ()) / 2;
+            }
+            attackmod += mToHitModifier;
         }
     } else {
         /* basic attack */
@@ -1111,6 +1284,8 @@ shCreature::resolveMeleeAttack (shObject *weapon,
             dbonus = ABILITY_MODIFIER (getStr ());
         }
     }
+
+    dbonus += mDamageModifier;
 
     if (0 == target->canSee (this)) {
         attackmod += 2;
@@ -1127,7 +1302,9 @@ shCreature::resolveMeleeAttack (shObject *weapon,
     if (isProne ()) {
         attackmod -= 4;
     }
-    if (target->isAsleep ()) {
+    if (target->isAsleep () || target->isParalyzed () || 
+        target->isSessile ()) 
+    {
         flatfooted = 1;
         attackmod += 8;
     }
@@ -1163,7 +1340,8 @@ shCreature::resolveMeleeAttack (shObject *weapon,
 
     if (isHero ()) {
 
-        if (target->isMonolith () && attack == mIlk->mAttacks.get (0)) 
+        if (target->isMonolith () && attack == mIlk->mAttacks.get (0) && 
+            !target->isHostile ()) 
         {
             I->p ("You touch the monolith!");
             I->p ("You feel more experienced!");
@@ -1172,34 +1350,42 @@ shCreature::resolveMeleeAttack (shObject *weapon,
             target->die (kSuicide);
             return 1;
         }
-
+        if (dmul > 1) {
+            I->p ("You hit %s!", n_target);
+        } else {
+            I->p ("You hit %s.", n_target);
+        }
         if (target->sufferDamage (attack, this, dbonus, dmul)) {
-            I->p ("You %s %s!", target->deathVerb (1), n_target);
+            target->pDeathMessage (n_target, kSlain, 0);
             if (!target->isHero ()) {
                 Hero.earnXP (target->mCLevel);
             }
             target->die (kSlain);
             exerciseWeaponSkill (weapon, 1);
             return 1;
-        } else if (dmul > 1) {
-            I->p ("You hit %s!", n_target);
-        } else {
-            I->p ("You hit %s.", n_target);
-        }
+        } 
         exerciseWeaponSkill (weapon, 1);
         target->newEnemy (this);
         target->interrupt ();
         return 0;
     } else if (target->isHero ()) {
-        I->p ("%s%s!", n_attacker, monHitsYouMesg (attack));
-        if (shAttack::kFaceHug == attack->mType && !RNG (3)) {
+        const char *hitsmesg = monHitsYouMesg (attack);
+        if (hitsmesg) 
+            I->p ("%s%s!", n_attacker, hitsmesg);
+        if (shAttack::kFaceHug == attack->mType && !RNG (3) &&
+            !Hero.getStoryFlag ("impregnation")) 
+        {
             I->p ("The facehugger impregnates you with an alien embryo!");
             Hero.setStoryFlag ("impregnation", 1);
             die (kSlain);
             return -2;
         }
         if (target->sufferDamage (attack, this, dbonus, dmul)) {
-            target->die (kSlain, this);
+            if (shAttack::kExtractBrain == attack->mType) {
+                target->die (kBrainJarred, this);
+            } else {
+                target->die (kSlain, this);
+            }
             return 1;
         }
         return 0;
@@ -1209,7 +1395,7 @@ shCreature::resolveMeleeAttack (shObject *weapon,
         }
         if (target->sufferDamage (attack, this, dbonus, dmul)) {
             if (!cantsee) {
-                I->p ("%s is %s!", n_target, target->deathVerb ());
+                target->pDeathMessage (n_target, kSlain);
             }
             target->die (kSlain);
             return 1;
@@ -1252,6 +1438,12 @@ shHero::meleeAttack (shObject *weapon, shDirection dir)
         return 0;
     }
 
+    target = Level->getCreature (x, y);
+
+    if (target && target->mHidden) {
+        target->revealSelf ();
+    }
+
     if (NULL == weapon) {
         if (0 == getStoryFlag ("strange weapon message")) {
             I->p ("You start pummeling your foes with your bare hands.");
@@ -1262,19 +1454,16 @@ shHero::meleeAttack (shObject *weapon, shDirection dir)
         attack = & ((shWeaponIlk *) weapon->mIlk) -> mAttack;
     } else {
         if (0 == getStoryFlag ("strange weapon message")) {
-            char buf[80];
-            weapon->your (buf, 80);
-            I->p ("You start smashing enemies with %s.", buf);
+            I->p ("You start smashing enemies with %s.", weapon->your ());
             setStoryFlag ("strange weapon message", 1);
         }
         attack = &ImprovisedObjectAttack;       
     }
 
-    target = Level->getCreature (x, y);
     if (NULL == target) {
         I->p ("You attack thin air!");
     } else {
-        resolveMeleeAttack (weapon, attack, target);
+        resolveMeleeAttack (attack, weapon, target);
     }
     feel (x, y);
     
@@ -1292,20 +1481,18 @@ int
 shMonster::meleeAttack (shObject *weapon, shAttack *attack, int x, int y)
 {
     shCreature *target;
-    char buf[64];
 
     target = mLevel->getCreature (x, y);
     if (NULL == target) {
         if (Hero.canSee (this)) {
-            the (buf, 64);
-            I->p ("%s attacks thin air!", buf);
+            I->p ("%s attacks thin air!", the ());
         }
         return -1;
     } 
     if (Hero.isBlind ()) {
         Hero.feel (mX, mY);
     }
-    return resolveMeleeAttack (weapon, attack, target);
+    return resolveMeleeAttack (attack, weapon, target);
 
 }
 
@@ -1321,19 +1508,16 @@ shObject::impact (int x, int y, shDirection dir, shCreature *thrower)
         shAttack *atk = & ((shWeaponIlk *) mIlk) -> mAttack;
         if (shAttack::kSingle != atk->mEffect) { /* a grenade! */
             //I->p ("it explodes!");
-            Level->areaEffect (atk, x, y, dir, thrower);
+            if (Hero.canSee (x, y)) 
+                setIlkKnown ();
+            Level->areaEffect (atk, this, x, y, dir, thrower, mEnhancement, 0);
             delete this;
             return;
         }
     } 
 
     if (sufferDamage (&GroundCollisionAttack, x, y)) {
-        if (Hero.canSee (x, y)) {
-            char buf[64];
-            an (buf, 64);
-            I->p ("%s shatters!", buf);
-            delete this;
-        }
+        delete this;
     } else {
         Level->putObject (this, x, y);
     }
@@ -1343,27 +1527,30 @@ shObject::impact (int x, int y, shDirection dir, shCreature *thrower)
 void
 shObject::impact (shCreature *c, shDirection dir, shCreature *thrower)
 {
-    char cbuf[64], wbuf[64];
     int x, y;
+    int dbonus = 0;
     shAttack *atk;
+    const char *the_monster = c->the ();
 
-    the (wbuf, 64);
-    c->the (cbuf, 64);
     x = c->mX;
     y = c->mY;
     
-    I->p ("%s hits %s.", wbuf, cbuf);
+    I->p ("%s hits %s.", theQuick (), the_monster);
 
     if (isThrownWeapon ()) {
         atk = & ((shWeaponIlk *) mIlk) -> mAttack;
+        dbonus += mEnhancement;
+        if (shAttack::kSingle == atk->mEffect) {
+            dbonus += ABILITY_MODIFIER (thrower->getStr ());
+        }
     } else {
         atk = &ImprovisedMissileAttack;
     }
 
     if (shAttack::kSingle == atk->mEffect) {
-        if (c->sufferDamage (atk, thrower)) {
+        if (c->sufferDamage (atk, thrower, dbonus)) {
             if (thrower->isHero () && !c->isHero ()) {
-                I->p ("%s is %s!", c, c->deathVerb ());
+                c->pDeathMessage (the_monster, kSlain);
                 Hero.earnXP (c->mCLevel);
             }
             c->die (kSlain);
@@ -1378,7 +1565,9 @@ shObject::impact (shCreature *c, shDirection dir, shCreature *thrower)
         Level->putObject (this, x, y);
     } else { /* a grenade */
         //I->p ("it explodes!");
-        Level->areaEffect (atk, c->mX, c->mY, dir, thrower);
+        if (Hero.canSee (c)) 
+            setIlkKnown ();
+        Level->areaEffect (atk, this, c->mX, c->mY, dir, thrower, 0, dbonus);
         delete this;
     }
 
@@ -1399,18 +1588,15 @@ shObject::impact (shFeature *f, shDirection dir, shCreature *thrower)
                 /* bounce back one square */
                 Level->moveForward (uTurn (dir), &x, &y);
             }
-            Level->areaEffect (atk, x, y, dir, thrower);
+            if (Hero.canSee (x, y)) 
+                setIlkKnown ();
+            Level->areaEffect (atk, this, x, y, dir, thrower, 0, mEnhancement);
             delete this;
             return;
         }
     } 
     if (sufferDamage (&GroundCollisionAttack, x, y)) {
-        if (Hero.canSee (x, y)) {
-            char buf[64];
-            an (buf, 64);
-            I->p ("%s shatters!", buf);
-            delete this;
-        }
+        delete this;
     } else {
         if (f->isObstacle ()) {
             /* bounce back one square */
@@ -1422,20 +1608,84 @@ shObject::impact (shFeature *f, shDirection dir, shCreature *thrower)
 }
 
 
+
+void
+shCreature::shootLock (shObject *weapon, shAttack *attack,
+                       shFeature *door)
+{
+    if (!isHero ())
+        return;
+
+    if (areAdjacent (Hero.mX, Hero.mY, door->mX, door->mY) &&
+        Hero.canSee (door->mX, door->mY))
+    {
+        int score = 
+            sportingD20 () + 4 + 
+            getWeaponSkillModifier(weapon->mIlk) + 
+            attack->mDamage[0].mNumDice * 
+            attack->mDamage[0].mDieSides + 
+            door->mSportingChance;
+        door->mSportingChance += RNG (2, 6);
+                
+        /* FIXME: I don't like the 
+           wording of these messages: */
+        if (score < 22) {
+            I->p ("You shoot the lock.");
+        } else if (door->isLockBrokenDoor ()) {
+            I->p ("You shoot the lock open!");
+            door->mDoor &= ~shFeature::kLocked;
+        } else if (RNG (3)) {
+            I->p ("You shoot the lock off!");
+            door->mDoor |= shFeature::kLockBroken;
+            door->mDoor &= ~shFeature::kLocked;
+        } else {
+            I->p ("You break the lock!");
+            door->mDoor |= shFeature::kLockBroken;
+        }
+        
+        if (door->isAlarmedDoor ()) {
+            I->p ("You set off an alarm!");
+            Level->doorAlarm (door);
+        }
+    }
+}
+
+
 /* returns: 1 if the feature should block further effect
-            0 otherwise
+            0 if effect should continue
+            -1 if effect should be reflected (message printed)
  */
 int
-shMapLevel::areaEffectFeature (shAttack *atk, int x, int y,
-                               shCreature *attacker)
+shMapLevel::areaEffectFeature (shAttack *atk, shObject *weapon, int x, int y,
+                               shCreature *attacker, int dbonus /* = 0 */)
 {
     shFeature *f = getFeature (x, y);
-    if (!f) return 0;
     int destroy = 0;
     int block = 1;
 
+    if (!f || GameOver) 
+        return 0;
+
     switch (f->mType) {
     case shFeature::kDoorClosed:
+        if (f->isMagneticallySealed ()) {
+            if (kLaser == atk->mDamage[0].mEnergy || 
+                kForce == atk->mDamage[0].mEnergy ) 
+            {
+                if (Hero.canSee (x, y))
+                    I->p ("The %s bounces off the door!", atk->noun ());
+                return -1;
+            } 
+            if (Hero.canSee (x, y) && shAttack::kGaussRay != atk->mType)
+                I->p ("The %s is absorbed by a force field!", atk->noun ());
+            return 1;
+        }
+        if (attacker->isHero () && f->isLockedDoor () && 
+            (kLaser == atk->mDamage[0].mEnergy || 
+             kForce == atk->mDamage[0].mEnergy))
+        {
+            attacker->shootLock (weapon, atk, f);
+        }
         switch (atk->mType) {
         case shAttack::kDisintegrationRay:
             if (Hero.canSee (x, y)) {
@@ -1471,7 +1721,9 @@ shMapLevel::areaEffectFeature (shAttack *atk, int x, int y,
         case shAttack::kFreezeRay:
         default:
             if (Hero.canSee (x, y)) {
-                I->p ("The door absorbs the %s.", atk->noun ());
+                setSpecialEffect (x, y, beamSpecialEffect (atk, kOrigin));
+                drawSq (x, y);
+                //I->p ("The door absorbs the %s.", atk->noun ());
             }
             break;
         }
@@ -1511,6 +1763,72 @@ shMapLevel::areaEffectFeature (shAttack *atk, int x, int y,
             break;
         }
         break;
+    case shFeature::kMovingHWall:
+        switch (atk->mType) {
+        case shAttack::kDisintegrationRay:
+            if (Hero.canSee (x, y)) {
+                I->p ("The moving wall section is annihilated!"); 
+            } else {
+                I->p ("You hear a loud bang!");
+            }
+            destroy = 1; 
+            break;
+        default:
+            if (Hero.canSee (x, y)) {
+                //I->p ("The wall absorbs the %s.", atk->noun ());
+            }
+            break;
+        }
+        break;
+    case shFeature::kMachinery:
+        switch (atk->mType) {
+        case shAttack::kDisintegrationRay:
+            if (Hero.canSee (x, y)) {
+                I->p ("The machinery is annihilated!"); 
+            } else {
+                I->p ("You hear a loud bang!");
+            }
+            destroy = 1; 
+
+            /* KLUDGE: stop the wall from moving */
+            int w;
+            for (w = y+1; w <= y +8; w++) {
+                shFeature *g = Level->getFeature (x, w);
+                if (!g)
+                    break;
+                if (shFeature::kMovingHWall == g->mType) {
+                    g->mType = shFeature::kMachinery;
+                    if (Hero.canSee (x, y)) {
+                        I->p ("The wall segment lurches and halts.");
+                    } else {
+                        I->p ("You hear gears lurching and grinding.");
+                    }
+                    break;
+                }
+                if (shFeature::kMovingHWall != g->mType)
+                    break;
+            }
+            for (w = y-1; w <= y - 8; w--) {
+                shFeature *g = Level->getFeature (x, w);
+                if (!g)
+                    break;
+                if (shFeature::kMovingHWall == g->mType) {
+                    g->mType = shFeature::kMachinery;
+                    if (Hero.canSee (x, y)) {
+                        I->p ("The wall segment lurches and halts.");
+                    } else {
+                        I->p ("You hear gears lurching and grinding.");
+                    }
+                    break;
+                }
+                if (shFeature::kMovingHWall != g->mType)
+                    break;
+            }
+            break;
+        default:
+            break;
+        }
+        break;
     default:
         /* no effect */
         block = 0;
@@ -1527,10 +1845,29 @@ shMapLevel::areaEffectFeature (shAttack *atk, int x, int y,
 
 
 void
-shMapLevel::areaEffectObjects (shAttack *atk, int x, int y, 
-                               shCreature *attacker)
+shMapLevel::areaEffectObjects (shAttack *atk, shObject *weapon, int x, int y, 
+                               shCreature *attacker, int dbonus /* = 0 */)
 {
+    shObjectVector *v = Level->getObjects (x, y);
+    int i;
 
+    if (v && !GameOver) {
+        for (i = 0; i < v->count (); i++) {
+            shObject *obj = v->get (i);
+            int numdestroyed = obj->sufferDamage (atk, x, y, 1, 1);
+            if (numdestroyed) {
+                if (obj->isUnpaid ()) {
+                    Hero.usedUpItem (obj, numdestroyed, "destroy"); 
+                }
+                if (numdestroyed == obj->mCount) {
+                    v->remove (obj);
+                    --i;
+                } else {
+                    obj->mCount -= numdestroyed;
+                }
+            }
+        }
+    }
 }
 
 
@@ -1540,27 +1877,23 @@ shMapLevel::areaEffectObjects (shAttack *atk, int x, int y,
  */
 
 int
-shMapLevel::areaEffectCreature (shAttack *atk, int x, int y, 
-                               shCreature *attacker)
+shMapLevel::areaEffectCreature (shAttack *atk, shObject *weapon, int x, int y, 
+                                shCreature *attacker, 
+                                int attackmod, int dbonus /* = 0 */)
 {
-    const int buflen = 64;
-    char buf[buflen];
     const char *msg = beamHitsMesg (atk);
     int died = 0;
+    int dmul = 0;
     int block = 0;
-    int dc = 15;
     int divider = 1;
+    int dc = 15 + attackmod;
     shCauseOfDeath howdead = kSlain;
 
     shCreature *c = getCreature (x, y);
-    if (!c) return 0;
-    c->the (buf, buflen);
+    if (!c || GameOver) return 0;
 
-    if (Hero.canSee (x, y)) {
-        drawSq (x, y);
-    }
-    I->cursorOnHero ();
-    
+    const char *the_monster = c->the ();
+
     if (atk->mType == shAttack::kTransporterRay) {
         int self = c == attacker;
         if (!self) c->newEnemy (attacker);
@@ -1569,80 +1902,136 @@ shMapLevel::areaEffectCreature (shAttack *atk, int x, int y,
         return 0;
     } 
 
-    if (attacker) {
-        dc += attacker->mBAB;
-    } 
-
     if (c->hasShield () && 
         c->countEnergy ()) 
     { /* the shield is big, so it's always hit */
         block = 1;
+        dmul = 1;
+        if (atk->mType == shAttack::kBlast) {
+            if (c->isHero ()) {
+                I->p ("You are caught in the blast!");
+            } else {
+                I->p ("%s is caught in the blast!", the_monster);
+            }
+        }
     } else if (atk->mType == shAttack::kFlash) {
         /* no save possible */
-    } else if (c != attacker && c->reflexSave (atk, dc)) {
-        msg = NULL;
-        if (atk->mType == shAttack::kBlast) {
-            /* save for half damage */
+        dmul = 1;
+    } else if (atk->mType == shAttack::kBlast) {
+        /* save for half damage */
+        dmul = 1;
+        if (c != attacker && c->reflexSave (atk, dc)) {
             ++divider;
             if (c->isHero ()) {
                 I->p ("You duck some of the blast.");
             } else {
-                I->p ("%s ducks some of the blast.", buf);
+                I->p ("%s ducks some of the blast.", the_monster);
             }
         } else {
-            /* save for no damage */
             if (c->isHero ()) {
-                I->p ("You dodge the %s", atk->noun ());
+                I->p ("You are caught in the blast!");
             } else {
-                if (Hero.canSee (c)) {
-                    I->p ("%s dodges the %s.", buf, atk->noun ());
-                }
-                if (attacker && 
-                    (attacker->isHero () || attacker->isPet ()))
-                {
-                    c->newEnemy (attacker);
-                }
+                I->p ("%s is caught in the blast!", the_monster);
+            }
+        }
+    } else if (atk->mType == shAttack::kLaser) {
+        dmul = attacker->rangedAttackHits (atk, weapon, attackmod, c, &dbonus);
+        if (dmul <= 0) {
+            if (!c->isHero () && attacker && 
+                (attacker->isHero () || attacker->isPet ()))
+            {
+                c->newEnemy (attacker);
             }
             return 0;
         }
+    } else if (c != attacker && c->reflexSave (atk, dc)) {
+        /* save for no damage */
+        if (c->isHero ()) {
+            I->p ("You dodge the %s!", atk->noun ());
+        } else {
+            if (Hero.canSee (c)) {
+                I->p ("%s dodges the %s.", the_monster, atk->noun ());
+            }
+            if (attacker && 
+                (attacker->isHero () || attacker->isPet ()))
+            {
+                c->newEnemy (attacker);
+            }
+        }
+        return 0;
+    } else {
+        dmul = 1;
+        if (atk->mType == shAttack::kBlast) {
+            if (c->isHero ()) {
+                I->p ("You are caught in the blast!");
+            } else {
+                I->p ("%s is caught in the blast!", the_monster);
+            }
+        }
     }
 
+    if (!Hero.isBlind ()) {
+        setSpecialEffect (x, y, beamSpecialEffect (atk, kOrigin));
+        drawSq (x, y);
+    }
+    I->cursorOnHero ();
+    
+    if (shAttack::kLaser == atk->mType) 
+        block = 1;
+
     if (c->isHero ()) {
-        if (msg) I->p ("%s you.", msg);
-        if (Hero.sufferDamage (atk)) {
+        if (msg) I->p ("%s you!", msg);
+        draw ();
+        //I->pauseXY (Hero.mX, Hero.mY);
+        if (Hero.sufferDamage (atk, NULL, dbonus, dmul, divider)) {
             if (attacker == c) {
                 died = -2;
             }
             if (atk->mType == shAttack::kDisintegrationRay) {
                 c->die (kAnnihilated, "a disintegration ray");
-                block = 1;
+                //block = 1;
             } else {
-                char deathbuf[40];
-                snprintf (deathbuf, 40, "a %s", atk->noun ());
+                char deathbuf[50];
+                if (attacker && !attacker->isHero () && c->isHero ()) {
+                    Hero.resetBlind ();
+                    Level->setLit (attacker->mX, attacker->mY, 1, 1, 1, 1);
+                    Level->mVisibility [attacker->mX][attacker->mY] = 1;
+                    if (attacker->isA ("dalek")) {
+                        strncpy (deathbuf, AN (attacker), 50);
+                    } else {
+                        snprintf (deathbuf, 50, "%s's %s",
+                                 AN (attacker), 
+                                  weapon ? weapon->getShortDescription () 
+                                         : atk->noun ());
+                    }
+                } else {
+                    snprintf (deathbuf, 50, "%s %s", 
+                              isvowel (atk->noun ()[0]) ? "an" : "a",
+                              atk->noun ());
+                }
                 c->die (kSlain, deathbuf);
             }
         }
     } else {
         if (Hero.canSee (c)) {
-            if (msg) I->p ("%s %s.", beamHitsMesg (atk), buf);
+            if (msg) {
+                draw ();
+                I->p ("%s %s!", beamHitsMesg (atk), the_monster);
+                //I->pauseXY (Hero.mX, Hero.mY);
+            }
         } else {
         }
-        if (c->sufferDamage (atk)) {
+        if (c->sufferDamage (atk, NULL, dbonus, dmul, divider)) {
             if (attacker && attacker->isHero () && !c->isHero ()) {
                 Hero.earnXP (c->mCLevel);
             }
             if (Hero.canSee (c)) {
                 if (shAttack::kDisintegrationRay == atk->mType) {
                     howdead = kAnnihilated;
+                } else if (shAttack::kGaussRay == atk->mType) {
+                    howdead = kMisc;
                 }
-                I->p ("%s is %s!", buf,
-                      shAttack::kDisintegrationRay == atk->mType ? 
-                      "annihilated" :
-                      (shAttack::kGaussRay == atk->mType && c->isRobot ()) ?
-                      /* now robots are always "disabled" instead of dying, 
-                         but just in case I change it back to "destroyed"... */
-                      "disabled" : 
-                      c->deathVerb ());
+                c->pDeathMessage (the_monster, howdead);
             }
             if (attacker == c) {
                 died = -2;
@@ -1656,26 +2045,26 @@ shMapLevel::areaEffectCreature (shAttack *atk, int x, int y,
             }
             c->interrupt ();
         }
-        if (shAttack::kDisintegrationRay == atk->mType) {
-            block = 1;
-        }
     }
-    //I->smallPause ();
 
-    usleep (50000);
-    drawSpecialEffect (x, y, beamSpecialEffect (atk));
     return died ? -2 : block;
 }
 
 
 /* returns -2 if attacker dies */
 int
-shMapLevel::areaEffect (shAttack *atk, int x, int y, 
-                        shDirection dir, shCreature *attacker)
+shMapLevel::areaEffect (shAttack *atk, shObject *weapon, int x, int y, 
+                        shDirection dir, shCreature *attacker, 
+                        int attackmod, int dbonus /* = 0 */)
 {
     int u, v;
     int i;
+    int res;
     int died = 0;
+    int seen = 0;
+    int firsttarget = 1;
+    shMapLevel *savelev = Level;
+
 
     /* General rule: affect any features first, then creatures,
        because the death of a monster might cause an automatic door to
@@ -1697,22 +2086,59 @@ shMapLevel::areaEffect (shAttack *atk, int x, int y,
             if (!isFloor (x, y)) {
                 break;
             }
-            drawSpecialEffect (x, y, beamSpecialEffect (atk));
-            I->refreshScreen ();
-            if (areaEffectFeature (atk, x, y, attacker)) {
+            if (!Hero.isBlind () && 
+                beamSpecialEffect (atk, dir) && kDown != dir) 
+            {
+                setSpecialEffect (x, y, beamSpecialEffect (atk, dir));
+                draw ();
+                seen++;
+            }
+
+            shCreature *c = getCreature (x, y);
+            if (c && c->reflectAttack (atk, &dir)) {
+                if (!Hero.isBlind ()) {
+                    setSpecialEffect (x, y, beamSpecialEffect (atk, kOrigin));
+                    draw ();
+                    seen++;
+                }
+                continue;
+            }
+
+            res = areaEffectFeature (atk, weapon, x, y, attacker, dbonus);
+            if (res < 0) {
+                /* reflect it */
+                dir = reflectBackDir (dir);
+                setSpecialEffect (x, y, beamSpecialEffect (atk, kOrigin));
+                draw ();
+                seen++;
+                continue;
+            } else if (res > 0) {
                 break;
             }
 
-            if (kDown != dir && 
-                -2 == areaEffectCreature (atk, x, y, attacker)) 
-            {
-                died = -2;
+            if (c && kDown != dir) { 
+                int tohitmod = 0;
+                if (!attacker->isHero () && !c->isHero ())
+                    tohitmod -= 8; /* avoid friendly fire */
+                else if (!firsttarget)
+                    tohitmod -= 4;
+                firsttarget = 0;
+                int what = 
+                    areaEffectCreature (atk, weapon, x, y, attacker, 
+                                        attackmod + tohitmod, dbonus);
+                if (-2 == what) {
+                    died = -2;
+                } else if (1 == what) {
+                    break;
+                }
             }
-            areaEffectObjects (atk, x, y, attacker);
+            areaEffectObjects (atk, weapon, x, y, attacker, dbonus);
             if (kDown == dir && 
                 shAttack::kDisintegrationRay == atk->mType) 
             {
-                if (!Level->getFeature (x, y)) {
+                if (!Level->getFeature (x, y) &&
+                    !Level->isInGarbageCompactor (x, y)) 
+                {
                     Level->addTrap (x, y, shFeature::kHole);
                     Level->checkTraps (x, y, 100);
                 }
@@ -1723,7 +2149,14 @@ shMapLevel::areaEffect (shAttack *atk, int x, int y,
                 break;
             }
         }
-        usleep (100000);
+        if (seen) {
+            if (Level == savelev && kDead != Hero.mState) {
+                draw ();
+                I->pauseXY (Hero.mX, Hero.mY, 300);
+            }
+            savelev->clearSpecialEffects ();
+            draw ();
+        }
         return died;
     case shAttack::kCone:
     case shAttack::kSpread:
@@ -1732,33 +2165,44 @@ shMapLevel::areaEffect (shAttack *atk, int x, int y,
     case shAttack::kBurst:
         for (u = x - atk->mRadius; u <= x + atk->mRadius; u++) {
             for (v = y - atk->mRadius; v <= y + atk->mRadius; v++) {
-                if (distance (u, v, x, y) <= 5 * atk->mRadius + 2
+                if (isInBounds (u, v) 
+                    && distance (u, v, x, y) <= 5 * atk->mRadius + 2
                     && isFloor (u,v) 
                     && existsLOS (x, y, u, v)) 
                 {
-                    if (isInLOS (u, v)) {
-                        drawSpecialEffect (u, v,
-                                           shAttack::kFlash == atk->mType ? kRadiationEffect 
-                                                                          : kExplosionEffect);
+                    if (!Hero.isBlind ()) {
+                        shSpecialEffect eff = 
+                            shAttack::kFlash == atk->mType ? kRadiationEffect 
+                                                           : kExplosionEffect;
+                        setSpecialEffect (u, v, eff);
+                        draw ();
+                        seen++;
                     }
-                    areaEffectFeature (atk, u, v, attacker);
+                    areaEffectFeature (atk, weapon, u, v, attacker, dbonus);
                 }
             }
         }
-        I->refreshScreen ();
         for (u = x - atk->mRadius; u <= x + atk->mRadius; u++) {
             for (v = y - atk->mRadius; v <= y + atk->mRadius; v++) {
-                if (distance (u, v, x, y) <= 5 * atk->mRadius + 2
+                if (isInBounds (u, v) 
+                    && distance (u, v, x, y) <= 5 * atk->mRadius + 2
                     && existsLOS (x, y, u, v)) 
                 {
-                    if (-2 == areaEffectCreature (atk, u, v, attacker)) {
+                    if (-2 == areaEffectCreature (atk, weapon, u, v, attacker, 
+                                                  dbonus)) 
+                    {
                         died = -2;
                     }
-                    areaEffectObjects (atk, u, v, attacker);
+                    areaEffectObjects (atk, weapon, u, v, attacker, dbonus);
                 }
             }
         }
-        usleep (100000);
+        if (seen && kDead != Hero.mState && effectsInEffect ()) {
+            draw ();
+            I->pauseXY (Hero.mX, Hero.mY, 300);
+            clearSpecialEffects ();
+            draw ();
+        }
         return died;
     }
     return 0;

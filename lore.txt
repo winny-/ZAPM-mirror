@@ -1,61 +1,192 @@
-warp fungus
-     This sessile creature secretes a corrosive slime.
+# similar to nethack's data.base file
+# need to fill in a lot of blanks here, and then link to the "look there"
+# command so Hero can get in-game hints about monsters, etc.
 
-grid bug     
-     My tribute to the best game ever, Nethack.
 
-bore worm
-     These disgusting worms are a favorite interrogation tool of secret
-     police forces across the galaxy.
+bomb
+    Pinback: But you can't explode in the bomb bay because it's
+    foolish!  You'll kill us all!  There's no reason for it!
 
+    Bomb #20: I am programmed to detonate in 9 minutes.  Detonation
+    will occur at the programmed time.
+
+    Pinback: Wouldn't you consider another course of action, for
+    example just waiting around awhile so we can disarm you?
+
+    Bomb #20: No.
+
+          [ Dark Star, directed by John Carpenter, 
+            written by John Carpenter and Dan O'Bannon ]
+
+
+bore worm 
      Klytus: Bring me the bore worms.
      Princess Aura: No! No! Not the bore worms.
      Klytus: Oh your grace, shall I stop the torture?
      Emperor Ming: (eats grape) No.
-     	     [ Flash Gordon (1980), directed by Mike Hodges,
-               written by Michael Allin and Alex Raymond ]
+     	  [ Flash Gordon, directed by Mike Hodges,
+            written by Michael Allin and Alex Raymond ]
 
-tribble
 
-flying toaster
+brain bug
+     "Insects with intelligence?!!  Have you ever met one?  I can't
+     believe I am hearing this nonsense.  This is the most ridiculous
+     conversation I have ever..."
 
-mynock
+     "Would you just wait a minute!!  (expletive deleted) Maybe there is
+     some kind of bug that we haven't seen yet, a leadership caste, a hive
+     brain..."
 
-giant cockroach
+     "Brain bug?!!!  Frankly I find the idea of a bug that thinks
+     offensive!"
+    
+          [ Starship Troopers, directed by Paul Verhoeven, 
+            written by Edward Neumeier and Robert A. Heinlein ]
 
-man eating plant
-
-gray
-
-killer tomato
-
-mutant human
-
-space goblin
-
-tapioca pudding
+brain cylinder
+     There was a harmless way to extract a brain, and a way to keep
+     the organic residue alive during its absence. The bare, compact
+     cerebral matter was then immersed in an occasionally replenished
+     fluid within an ether-tight cylinder of a metal mined in Yuggoth,
+     certain electrodes reaching through and connecting at will with
+     elaborate instruments capable of duplicating the three vital
+     faculties of sight, hearing, and speech. For the winged fungus-
+     beings to carry the brain-cylinders intact through space was an
+     easy matter. Then, on every planet covered by their civilisation,
+     they would find plenty of adjustable faculty-instruments capable
+     of being connected with the encased brains; so that after a
+     little fitting these travelling intelligences could be given a
+     full sensory and articulate life - albeit a bodiless and
+     mechanical one - at each stage of their journeying through and
+     beyond the space-time continuum. It was as simple as carrying a
+     phonograph record about and playing it wherever a phonograph of
+     corresponding make exists. Of its success there could be no
+     question. Akeley was not afraid. Had it not been brilliantly
+     accomplished again and again?
 
 catbot
 
 dogbot
 
-ork
+energy dome
+     It was designed according to ancient ziggaurat mound proportions
+     used in votive worship. Like the mounds it collects energy and
+     recirculates it.  In this case the Dome collects energy that
+     escapes from the crown of the human head and pushes it back into
+     the Medula Oblongata for increased mental energy. It's very
+     important that you buy a cheap plastic hardhat liner, adjust it
+     to your head size and affix it with duct tape or Super Glue to
+     the inside of the Dome. This allows the Dome to "float" just
+     above the cranium and thus do it's job.  Unfortunately, sans hard
+     hat liner, the recirculation of energy WILL NOT occur.
+          [ clubdevo.com, Gerald Casale ]
 
-alien
+flying toaster
 
+fuel barrel
+     Scattered around the base are drums containing fuel, toxic waste,
+     or some other volatile substance. If your shots hit one of these
+     barrels, it's kablooey time! It might take several bullets to set
+     off a barrel, but a single blast of any of the other weapons
+     usually does the trick.
+          [ Doom, developed by id Software, designed by John Romero ]
+
+giant cockroach
+     La cucaracha, la cucaracha,
+     ya no puede caminar
+     porque no tiene, porque le falta
+     marihuana pa' fumar.
+
+grid bug     
+     "Wait! I shall polymorph into a grid bug to give 
+     thee a fighting chance!"
+          [ Nethack, by the Dev Team ]
+
+
+killer tomato
+
+
+little_grey_alien
+tall_grey_alien
+     The Greys are an race of Aliens called the Zarflakoneons.  They
+     live right by the Xeroxomites.  Of course the Xeroxomites are are
+     really a race of alien that were created by the Hondacordoneans.
+     The Hondacordoneans are in an intergalactic war with the
+     Toyotanites who need the Toyotanites toenail clippings to power
+     thier fuel cells.  Proof?  You want proof?  Well, I'm sorry
+     that's impossible.  You see our Hubble Telescope just can't see
+     that far out into space.  But don't worry, in 2012 all 4 alien
+     races are gonna come here to collect on a Roth IRA they jointly
+     opened back in the 40's.  It's be worth billions. We'll get to
+     meet them all then.
+     [ The Grey Alien Species, post by mpeake of AboveTopSecret.com
+       http://www.abovetopsecret.com/forum/thread60048/pg1#pid626891 ]
+
+man eating plant
+     Feed me. Feed me. Feed me! 
+     Feed me, Seymour. 
+     Feed me all night long. 
+     "That's right, boy!" 
+     You can do it... 
+
+     Feed me, Seymour. 
+     Feed me all night long... 
+     'Cause if you feed me, Seymour, 
+     I can grow up, big and strong. 
+          [ Little Shop of Horrors, by Alan Menken and Howard Ashman ]
+
+mi-go
+     What people thought they saw were organic shapes not quite like
+     any they had ever seen before. Naturally, there were many human
+     bodies washed along by the streams in that tragic period; but
+     those who described these strange shapes felt quite sure that
+     they were not human, despite some superficial resemblances in
+     size and general outline. Nor, said the witnesses, could they
+     have been any kind of animal known to Vermont. They were pinkish
+     things about five feet long; with crustaceous bodies bearing vast
+     pairs of dorsal fins or membranous wings and several sets of
+     articulated limbs, and with a sort of convoluted ellipsoid,
+     covered with multitudes of very short antennae, where a head
+     would ordinarily be.
+          [ The Whisperer in Darkness, by H. P. Lovecraft ]
+
+mynock
+     Watch out!  It's alright.  It's alright!  Yeah, that's what I
+     thought.  Mynock.  Chewie, check the rest of the ship, and make
+     sure they're no more attached.  Chewing on the power cables.
+
+          [ The Empire Strikes Back, directed by Irvin Kershner,
+            written by Leigh Brackett and Lawrence Kasdan, 
+            story by George Lucas ]
+
+mutant human
+
+pulse rifle 
+     I wanna introduce you to a personal friend of mine. This is an
+     M41A pulse rifle. Ten millimeter with over-and-under thirty
+     millimeter pump action grenade launcher."
+
+          [ Aliens, directed by James Cameron, written by 
+            James Cameron, David Giler and Walter Hill ]
+
+space goblin
+
+tapioca pudding
+
+
+tribble
+     Well don't look at me, it's the tribbles who are breeding.  if we
+     don't get them off this ship we're gonna end up knee deep in
+     them...  The nearest thing I can figure out is that they're born
+     pregnant.  Which seems to be quite a timesaver...  And from my
+     observations, it seems they're bisexual, reproducing at will.
+     And brother have they got a lot of will.
+          [ The Trouble With Tribbles, directed by Joseph Pevney, 
+            written by David Gerrold ] 
 vat slime
 
-brain bug
- "Insects with intelligence?!!  Have you ever met one?
- I can't believe I am hearing this nonsense.  This is 
- the most ridiculous conversation I have ever..."
 
- "Would you just wait a minute!!  (expletive deleted) 
- Maybe there is some kind of bug that we haven't seen
- yet, a leadership caste, a hive brain..."
+warp fungus
+     This sessile creature secretes a corrosive slime.
 
- "Brain bug?!!!  Frankly I find the idea of a bug that
- thinks offensive!"
-
-     -Starship Troopers
 

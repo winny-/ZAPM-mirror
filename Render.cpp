@@ -22,32 +22,41 @@ shInterface::initializeGlyphs ()
     mSqGlyphs[kVWall] = '#' | ColorMap[kBlue];
     mSqGlyphs[kHWall] = '#' | ColorMap[kBlue];
     mSqGlyphs[kVirtualWall] = '#' | ColorMap[kGreen];
-    mSqGlyphs[kCaveWall] = '#' | ColorMap[kBlue];
+    mSqGlyphs[kCaveWall] = '#' | ColorMap[kBrown];
     mSqGlyphs[kNWCorner] = '#' | ColorMap[kBlue];
     mSqGlyphs[kNECorner] = '#' | ColorMap[kBlue];
     mSqGlyphs[kSWCorner] = '#' | ColorMap[kBlue];
     mSqGlyphs[kSECorner] = '#' | ColorMap[kBlue];
+    mSqGlyphs[kSewerWall] = '#' | ColorMap[kCyan];
     mSqGlyphs[kNTee] = '#' | ColorMap[kBlue];
     mSqGlyphs[kSTee] = '#' | ColorMap[kBlue];
     mSqGlyphs[kWTee] = '#' | ColorMap[kBlue];
     mSqGlyphs[kETee] = '#' | ColorMap[kBlue];
-    mSqGlyphs[kStoneFloor] = '.' | ColorMap[kBlue];
-    mSqGlyphs[kVirtualFloor] = '.' | ColorMap[kGreen];
 
+    mSqGlyphs[kFloor] = '.' | ColorMap[kBlue];
+    mSqGlyphs[kCavernFloor] = '.' | ColorMap[kBrown];
+    mSqGlyphs[kSewerFloor] = '.' | ColorMap[kBrown];
+    mSqGlyphs[kVirtualFloor] = '.' | ColorMap[kGreen];
+    mSqGlyphs[kSewage] = '~' | ColorMap[kGreen];
+    mSqGlyphs[kVoid] = '^' | ColorMap[kBlue];
 
     FeatureTiles[shFeature::kDoorHiddenVert] = '#' | ColorMap[kBlue];
     FeatureTiles[shFeature::kDoorHiddenHoriz] = '#' | ColorMap[kBlue];
     FeatureTiles[shFeature::kDoorBerserkClosed] = '+' | ColorMap[kRed];
     FeatureTiles[shFeature::kDoorClosed] = '+' | ColorMap[kCyan];
+    FeatureTiles[shFeature::kMachinery] = '&' | ColorMap[kCyan];
+    FeatureTiles[shFeature::kMovingHWall] = '=' | ColorMap[kCyan];
     FeatureTiles[shFeature::kStairsUp] = '<' | ColorMap[kWhite];
     FeatureTiles[shFeature::kStairsDown] = '>' | ColorMap[kWhite];
     FeatureTiles[shFeature::kVat] = '{' | ColorMap[kBrightGreen];
     FeatureTiles[shFeature::kComputerTerminal] = '_' | ColorMap[kGreen];
     FeatureTiles[shFeature::kPit] = '^' | ColorMap[kYellow];
     FeatureTiles[shFeature::kAcidPit] = '^' | ColorMap[kBrightYellow];
-    FeatureTiles[shFeature::kRadTrap] = '^' | ColorMap[kGreen];
+    FeatureTiles[shFeature::kSewagePit] = '^' | ColorMap[kGreen];
+    FeatureTiles[shFeature::kRadTrap] = '^' | ColorMap[kBrightGreen];
     FeatureTiles[shFeature::kTrapDoor] = '^' | ColorMap[kRed];
     FeatureTiles[shFeature::kHole] = '^' | ColorMap[kGray];
+    FeatureTiles[shFeature::kWeb] = '"' | ColorMap[kCyan];
     FeatureTiles[shFeature::kPortal] = '^' | ColorMap[kMagenta];
     FeatureTiles[shFeature::kDoorOpen] = '\'' | ColorMap[kCyan];
     FeatureTiles[shFeature::kDoorBerserkOpen] = '\'' | ColorMap[kRed];
@@ -103,7 +112,7 @@ shMapLevel::drawSqTerrain (int x, int y, int forget /* = 0 */,
     } else {
 doterrain:
         c = SQUARE_GLYPH (getSquare (x, y));
-        if (!isLit (x, y) && isFloor (x, y)) {
+        if (isFloor (x, y) && !isLit (x, y, x, y)) {
             if (!forget) {
                 setMemory (x, y, ' ');
                 forget = 1;
@@ -140,6 +149,7 @@ shMapLevel::drawSqCreature (int x, int y)
             case shCreature::kObject:
                 waddch (I->mMainWin, c->mMimickedObject->mGlyph.mChar);
                 setMemory (x, y, c->mMimickedObject->mGlyph.mChar);
+                return 1;
             default:
             case shCreature::kNothing: 
                 return 0; /* invisible, or hiding under existing object */
@@ -187,7 +197,7 @@ shMapLevel::feelSq (int x, int y)
         drawnchar = 1;
         return;
     }
-    if (countObjects (x, y) > 0) {
+    if (!isWatery (x, y) && countObjects (x, y) > 0) {
         /* display the lowest objecttype */
         shObjectVector *objs = getObjects (x, y);
         int i;
@@ -221,11 +231,28 @@ shMapLevel::drawSq (int x, int y, int forget /* = 0 */)
  /* if (0 == mVisibility[x][y]) { */
 
     if (!Hero.canSee (x, y)) {
+        if (!Hero.isBlind () && isInLOS (x, y) && 
+            getSpecialEffect (x, y)) 
+        {
+            if (drawSqSpecialEffect (x, y)) {
+                return;
+            }
+        }
         if (   Hero.hasTelepathy () 
             && isOccupied (x, y) 
             && getCreature (x, y) -> hasMind ()
             && distance (&Hero, x, y) < 5 * (Hero.mCLevel + 10)) 
         {
+            drawSqCreature (x, y);
+        } else if (   Hero.hasNightVision ()
+                   && isOccupied (x, y)
+                   && Hero.canSee (getCreature (x, y)))
+        {
+            if (rememberedCreature (x, y)) {
+                //FIXME: what terrain/object/etc did the hero remember here 
+                //       prior to the 'I' monster that was here?
+                setMemory (x, y, ' ');
+            }
             drawSqCreature (x, y);
         } else if (   Hero.hasMotionDetection () 
                    && isOccupied (x, y) 
@@ -237,16 +264,44 @@ shMapLevel::drawSq (int x, int y, int forget /* = 0 */)
             waddch (I->mMainWin, '0'); 
             wattrset (I->mMainWin, A_NORMAL);
             drawnchar = 1;
+        } else if (   Hero.hasNightVision ()
+                   && isInLOS (x, y)
+		      && ' ' != (getMemory (x, y) & A_CHARTEXT)
+                   && getKnownFeature (x, y) 
+                   && getKnownFeature (x, y) ->isDoor ())
+        { /* kludge: show doors because, e.g. night vision might have
+             revealed a creature on the other side that hero might not
+             expect to see if she remembers the door was closed. */
+            drawSqTerrain (x, y, 0);
         } else {
-            waddch (I->mMainWin, getMemory (x, y));
+            if (Hero.mZ < 0) {
+                if ('.' == (getMemory (x, y) & A_CHARTEXT)) {
+                    waddch (I->mMainWin, ' ');
+                } else {
+                    waddch (I->mMainWin, getMemory (x, y));
+                    //mvwchgat (I->mMainWin, y - I->mX0, x - I->mX0,
+                    //          1, A_DIM, COLOR_WHITE, NULL);
+                }
+
+            } else {
+                if (Flags.mShowLOS && 
+                    '.' == (getMemory (x, y) & A_CHARTEXT)) 
+                {
+                    waddch (I->mMainWin, ' ');
+                } else {
+                    waddch (I->mMainWin, getMemory (x, y));
+                }
+            }
         }
         return;
     }
-    if (isOccupied (x, y)) {    
-        drawSqCreature (x, y);
-        drawnchar = 1;
+    if (getSpecialEffect (x, y)) {
+        drawnchar = drawSqSpecialEffect (x, y);
+    } 
+    if (isOccupied (x, y) && !drawnchar) {    
+        drawnchar = drawSqCreature (x, y);
     }
-    if (countObjects (x, y) > 0) {
+    if (!isWatery (x, y) && countObjects (x, y) > 0) {
         /* display the lowest objecttype */
         shObjectVector *objs = getObjects (x, y);
         int i;
@@ -260,31 +315,39 @@ shMapLevel::drawSq (int x, int y, int forget /* = 0 */)
             }
         }
         if (0 == forget) {
+            //FIXME: if creature was a mimic, should remember
+            // the mimicked object instead of this obj!
             setMemory (x, y, bestobj->mIlk->mGlyph.mChar);
         }
         if (!drawnchar) {
             waddch (I->mMainWin, bestobj->mIlk->mGlyph.mChar);
+            drawnchar = 1;
         }
-    }
-    else {
+    } else {
         drawSqTerrain (x, y, forget, !drawnchar);
     }
 }
 
 
-void
-shMapLevel::drawSpecialEffect (int x, int y, shSpecialEffect e)
+int
+shMapLevel::drawSqSpecialEffect (int x, int y)
 {
+    shSpecialEffect e = getSpecialEffect (x, y);
     switch (e) {
+    case kNone:
     case kInvisibleEffect:
-        break;
+        return 0;
     case kExplosionEffect:
         wmove (I->mMainWin, y, x);
-        waddch (I->mMainWin, '*' | ColorMap[kWhite]);
+        waddch (I->mMainWin, '*' | ColorMap[kGray]);
         break;
     case kRadiationEffect:
         wmove (I->mMainWin, y, x);
         waddch (I->mMainWin, '*' | ColorMap[kGreen]);
+        break;
+    case kHeatEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '*' | ColorMap[kBrightRed]);
         break;
     case kColdEffect:
         wmove (I->mMainWin, y, x);
@@ -294,7 +357,69 @@ shMapLevel::drawSpecialEffect (int x, int y, shSpecialEffect e)
         wmove (I->mMainWin, y, x);
         waddch (I->mMainWin, '*' | ColorMap[kRed]);
         break;
+    case kLaserBeamHorizEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '-' | ColorMap[kBrightCyan]);
+        break;
+    case kLaserBeamVertEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '|' | ColorMap[kBrightCyan]);
+        break;
+    case kLaserBeamBDiagEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '\\' | ColorMap[kBrightCyan]);
+        break;
+    case kLaserBeamFDiagEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '/' | ColorMap[kBrightCyan]);
+        break;
+    case kLaserBeamEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '*' | ColorMap[kBrightCyan]);
+        break;
+    case kRailHorizEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '-' | ColorMap[kBrightRed]);
+        break;
+    case kRailVertEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '|' | ColorMap[kBrightRed]);
+        break;
+    case kRailBDiagEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '\\' | ColorMap[kBrightRed]);
+        break;
+    case kRailFDiagEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '/' | ColorMap[kBrightRed]);
+        break;
+    case kRailEffect:
+        //wmove (I->mMainWin, y, x);
+        //waddch (I->mMainWin, '*' | ColorMap[kBrightRed]);
+        break;
+    case kDisintegrationEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '*' | ColorMap[kBlue] | A_REVERSE);
+        break;
+    case kBinaryEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, (RNG(2) ? '1' : '0') | ColorMap[kBrightGreen] | A_REVERSE);
+        break;     
+    case kBugsEffect:
+    {
+        const char bugs[] = "~`@#$%^&*()-_=+:;'\"[]{}|\\/?>.<,";
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, bugs[RNG(strlen(bugs))] | ColorMap[RNG(kBrightCyan)] | A_REVERSE);
+        break;     
     }
+    case kVirusesEffect:
+        wmove (I->mMainWin, y, x);
+        waddch (I->mMainWin, '*' | ColorMap[kCyan]);
+        break;     
+    default:
+      return 0;
+    }
+    return 1;
 }
 
 
@@ -340,10 +465,10 @@ shInterface::drawSideWin ()
 
     wmove (I->mSideWin, 9, 0);
     if (Hero.mSpeed < 100) {
-        snprintf (linebuf, 16, "Slow  %4d", Hero.mSpeed - 100);
+        snprintf (linebuf, 16, "Speed %4d", Hero.mSpeed - 100);
         waddstr (I->mSideWin, linebuf);
-    } else if (Hero.mSpeed > 100) {
-        snprintf (linebuf, 16, "Fast  %+4d", Hero.mSpeed - 100);
+    } else if (Hero.mSpeed >= 100) {
+        snprintf (linebuf, 16, "Speed %+4d", Hero.mSpeed - 100);
         waddstr (I->mSideWin, linebuf);
     }
 
@@ -358,7 +483,7 @@ shInterface::drawSideWin ()
     {
         wattrset (I->mSideWin, ColorMap[kBrightRed]);
     }
-    snprintf (linebuf, 16, "HitPts %3d/%3d", Hero.mHP, Hero.mMaxHP);
+    snprintf (linebuf, 16, "HitPts %3d(%d)", Hero.mHP, Hero.mMaxHP);
     waddstr (I->mSideWin, linebuf);
     wattrset (I->mSideWin, A_NORMAL);
 
@@ -368,7 +493,9 @@ shInterface::drawSideWin ()
 
         wmove (I->mSideWin, 12, 0);
         wattrset (I->mSideWin, ColorMap[kCyan]);
-        snprintf (linebuf, 16, "Energy %3d/%3d", en, enmax);
+        snprintf (linebuf, 16, "Energy%4d", en);
+        if (enmax)
+            snprintf (linebuf+10, 6, "(%d)", enmax);
         waddstr (I->mSideWin, linebuf);
         wattrset (I->mSideWin, A_NORMAL);
     }
@@ -379,12 +506,13 @@ shInterface::drawSideWin ()
     waddstr (I->mSideWin, linebuf);
     wattrset (I->mSideWin, A_NORMAL);
 
-    if (Hero.mWeapon) {
+    if (Hero.mWeapon && Hero.mWeapon->isA (kWeapon)) {
         shWeaponIlk *ilk = (shWeaponIlk *) Hero.mWeapon->mIlk;
-        shObjectIlk *ammo = Hero.mWeapon->isA (kRayGun) ? NULL : ilk->mAmmoType;
+        shObjectIlk *ammo = 
+            Hero.mWeapon->isA (kRayGun) ? NULL : ilk->mAmmoType;
         int i, n = 0;
 
-        if (ammo && EnergyCell != ammo) {
+        if (ammo) {
             for (i = 0; i < Hero.mInventory->count (); i++) {
                 shObject *obj = Hero.mInventory->get (i);
                 if (obj->isA (ammo)) {
@@ -392,14 +520,16 @@ shInterface::drawSideWin ()
                 }
             }
             wmove (I->mSideWin, 13, 7);
-            snprintf (linebuf, 16, "=%d", n);
+            waddch (I->mSideWin, ammo->mGlyph.mChar);
+            snprintf (linebuf, 15, "%d", n);
             waddstr (I->mSideWin, linebuf);
         }
     }
 
     { /* Conditions */
         int n = 14;
-        char *condition = NULL;
+        const char *condition = NULL;
+        wattrset (I->mSideWin, ColorMap[kYellow]);
 
         if (Hero.isBlind ()) {
             wmove (I->mSideWin, n++, 0);
@@ -416,6 +546,10 @@ shInterface::drawSideWin ()
         if (Hero.isConfused ()) {
             wmove (I->mSideWin, n++, 0);
             waddstr (I->mSideWin, "Confused");
+        }
+        if (Hero.isHosed ()) {
+            wmove (I->mSideWin, n++, 0);
+            waddstr (I->mSideWin, "Hosed");
         }
         if (Hero.isSickened ()) {
             wmove (I->mSideWin, n++, 0);
@@ -445,12 +579,16 @@ shInterface::drawSideWin ()
         case kBurdened: condition = "Burdened";
         }
         if (condition) {
+            char condstr[16];
+
+            strncpy (condstr, condition, sizeof(condstr));
             wmove (I->mSideWin, n++, 0);
-            waddstr (I->mSideWin, condition);
+            waddstr (I->mSideWin, condstr);
         }
     }
+    wattrset (I->mSideWin, A_NORMAL);
         
-    wmove (I->mSideWin, 17, 0);
+    wmove (I->mSideWin, GodMode ? 17:19, 0);
     wattrset (I->mSideWin, A_BOLD);
     snprintf (linebuf, 16, "%5s %d", Level->mName, Level->mDLevel);
     waddstr (I->mSideWin, linebuf);
@@ -481,6 +619,9 @@ shInterface::drawSideWin ()
 void
 shInterface::drawLog ()
 {
+    if (mDiagWin) 
+        wnoutrefresh (mDiagWin);
+    touchwin (mLogWin);
     wnoutrefresh (mLogWin);
     doupdate ();
 }

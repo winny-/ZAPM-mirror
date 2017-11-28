@@ -28,7 +28,6 @@ enum shThingSize
 
 enum shMaterialType  //borrowed from Nethack
 {
-    kWarpish,
     kLiquid,
     kWax,
     kVegetable,
@@ -92,6 +91,10 @@ enum shIntrinsics {
     kScary =               0x200000,
     kAcidBlood =           0x400000,
     kMultiplier =          0x800000,
+    kAirSupply =           0x1000000, /* has air supply */
+    kBreathless =          0x2000000, /* doesn't need to breathe */
+    kCanSwim =             0x4000000, /* can swim */
+    kNightVision =         0x8000000,
 };
 
 
@@ -131,10 +134,10 @@ struct shObjectIlk
     struct shObjectIlk  *mParent;  // parent ilk, useful for isA ()
                                     // e.g. bullet is parent of silver bullet
     
-    char *mName;       /* precise name, e.g. "canister of restoration */
-    char *mAppearance; /* ignorant description, e.g. "green canister" */
-    char *mVagueName;  /* blind name, e.g. "canister" */
-    char *mUserName;   /* name given by user, e.g.: "tastes like medicine" */
+    const char *mName;       /* precise name, e.g. "canister of restoration */
+    const char *mAppearance; /* ignorant description, e.g. "green canister" */
+    const char *mVagueName;  /* blind name, e.g. "canister" */
+    const char *mUserName;   /* name given by user, e.g.: "tastes like crap" */
     shGlyph mGlyph;
 
     shMaterialType mMaterial;
@@ -143,7 +146,9 @@ struct shObjectIlk
 
     int mFlags;
     int mCarriedIntrinsics; /* conferred to the carrier */
-    int mInUseIntrinsics;   /* conferred only when active, worn or wielded */
+    int mWornIntrinsics;    /* conferred only when worn */
+    int mWieldedIntrinsics; /* conferred only when wielded */
+    int mActiveIntrinsics;  /* conferred only when active */
 
     int mProbability;  /* relative probability when randomly generating; 
                           -1 indicates an abstract ilk */
@@ -160,11 +165,15 @@ struct shObjectIlk
     //constructor:
     shObjectIlk () {
         mId = ObjectIlks.add (this);
-        mFlags = 0; mCarriedIntrinsics = 0; mInUseIntrinsics = 0;
+        mFlags = 0; mCarriedIntrinsics = 0; mWornIntrinsics = 0;
+        mWieldedIntrinsics = 0; mActiveIntrinsics = 0;
         mVagueName = NULL; mUserName = NULL;
     }
 
     int isA (shObjectIlk *ilk);
+
+    char *getRayGunColor (); /* kludgey, not reentrant*/
+
 };
 
 
@@ -181,7 +190,8 @@ struct shWeaponIlk : shObjectIlk
     shAttack mAttack;
 
     //constructor:
-    shWeaponIlk (char *name, char *vaguename, char *appearance, 
+    shWeaponIlk (const char *name, const char *vaguename, 
+                 const char *appearance, 
                  shColor color, 
                  shSkillCode skill,
                  shWeaponIlk *parent,
@@ -199,7 +209,8 @@ struct shWeaponIlk : shObjectIlk
 struct shRayGunIlk : shObjectIlk
 {
     shAttack mAttack;
-    shRayGunIlk (char *name, char *appearance, shColor color,
+    shRayGunIlk (const char *name, const char *appearance, shColor color,
+                 int flags,
                  shAttack::Type atktype, shEnergyType entype, 
                  int numdice, int dicesides, int cost, int prob);
 };
@@ -209,25 +220,24 @@ struct shImplantIlk : shObjectIlk
 {
     enum Site {
         kFrontalLobe,
-        kLeftTemporalLobe,
-        kRightTemporalLobe,
-        kLeftParietalLobe,
-        kRightParietalLobe,
+        kParietalLobe,
         kOccipitalLobe,
+        kTemporalLobe,
+        kCerebellum,
         kLeftEar,
-        kMaxSite,
+        kRightEyeball,
 
+        kMaxSite,
         kAnyEar,
-        kAnyTemporal,
-        kAnyParietal,
+        kAnyEye,
         kAnyBrain,
     };
 
     Site mSite;
     int mPsiModifier; 
     
-    shImplantIlk (char *name, char *vaguename, 
-                  char *appearance, 
+    shImplantIlk (const char *name, const char *vaguename, 
+                  const char *appearance, 
                   shColor color, 
                   shMaterialType material, int flags, 
                   Site site, int intrinsics,
@@ -235,7 +245,7 @@ struct shImplantIlk : shObjectIlk
                   int cost, int prob);
 };
 
-char *describeImplantSite (shImplantIlk::Site site);
+const char *describeImplantSite (shImplantIlk::Site site);
 
 enum shArmorFlags {
     kPowered = 0x100, /* the weight of worn powered armor doesn't encumber */
@@ -250,9 +260,12 @@ struct shArmorIlk : shObjectIlk
     int mEquipSpeed;  //ms to don or doff armor
     char mSpeedPenalty; //in % - 100% penalty == movement takes twice as long
     int mPsiModifier; 
+    int mToHitModifier;
+    int mDamageModifier;
 
     //constructor:
-    shArmorIlk (char *name, char *vaguename, char *appearance, 
+    shArmorIlk (const char *name, const char *vaguename, 
+                const char *appearance, 
                 shColor color, 
                 shArmorIlk *parent,
                 shMaterialType material, int flags, int weight,
@@ -267,7 +280,8 @@ struct shDeviceIlk : shObjectIlk
 {
     shMonsterIlk *mWreckIlk;
 
-    shDeviceIlk (char *name, char *vaguename, char *appearance,
+    shDeviceIlk (const char *name, const char *vaguename, 
+                 const char *appearance,
                  shColor color, shDeviceIlk *parent,
                  int cost, shMaterialType material, int flags, int weight,
                  shThingSize size, int hardness, int hp,
@@ -281,7 +295,8 @@ struct shToolIlk : shObjectIlk
 {
     shToolFunc *mUseFunc;
 
-    shToolIlk (char *name, char *vaguename, char *appearance, 
+    shToolIlk (const char *name, const char *vaguename, 
+               const char *appearance, 
                shColor color, shToolIlk *parent,
                int cost, shMaterialType material, int flags, int weight, 
                shThingSize size, int hardness, int hp, 
@@ -289,7 +304,6 @@ struct shToolIlk : shObjectIlk
                int prob);
 };
 
-extern shToolIlk *EnergyCell;
 extern shToolIlk *EnergyTank;
 extern shToolIlk *PowerPlant;
 
@@ -304,7 +318,7 @@ struct shCanisterIlk : shObjectIlk
     shCanisterUseFunc *mUseFunc;
     shCanisterFunc *mQuaffFunc;
     shCanisterFunc *mExplodeFunc;
-    shCanisterIlk (char *name, char *appearance, int flags, 
+    shCanisterIlk (const char *name, const char *appearance, int flags, 
                    shCanisterUseFunc *usefunc,
                    shCanisterFunc *quafffunc,
                    shCanisterFunc *explodefunc, 
@@ -318,7 +332,7 @@ typedef int shFloppyDiskFunc (shObject *computer, shObject *disk);
 struct shFloppyDiskIlk : shObjectIlk
 {
     shFloppyDiskFunc *mUseFunc;
-    shFloppyDiskIlk (char *name, char *appearance,
+    shFloppyDiskIlk (const char *name, const char *appearance,
                      shFloppyDiskFunc *usefunc,
                      int cost, int prob);
 };
@@ -335,10 +349,12 @@ extern shVector <shObjectIlk *> FloppyDiskIlks;
 extern shVector <shObjectIlk *> ImplantIlks;
 extern shVector <shObjectIlk *> ArtifactIlks;
 extern shVector <shObjectIlk *> RayGunIlks;
+extern shObjectIlk EnergyCellIlk;
 
 
 extern shToolIlk *Computer;
-
+extern shToolIlk *MasterKey;
+extern shToolIlk *LockPick;
 
 
 extern shArmorIlk *shHelmet;
@@ -346,6 +362,9 @@ extern shArmorIlk *shGoggles;
 extern shArmorIlk *shBodyArmor;
 extern shArmorIlk *shJumpsuit;
 extern shArmorIlk *shBelt;
+
+#define BZ 
+#define PCT
 
 #endif 
 

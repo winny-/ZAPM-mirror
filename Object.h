@@ -73,7 +73,7 @@ struct shObject : shThing
         kWorn =             0x20,
         kWielded =          0x40,
         kActive =           0x80,  // turned on, for example
-        kInUse =            0xe0,  // worn, wielded, or active
+//        kInUse =            0xe0,  // worn, wielded, or active
         kRadioactive =      0x100,
         kUnpaid =           0x200, /* belongs to shopkeeper */
         kToggled =          0x400,
@@ -87,22 +87,19 @@ struct shObject : shThing
     } mLocation;
     int mX;                   
     int mY;
-    shCreature *mOwner;
+    shCreature *mOwner;       /* creature with obj in inventory (use kUnpaid 
+                                 for obj owned by shopkeeper) */
 
-
-    char *mUserName;          /* name given by user with name command */
+    const char *mUserName;    /* name given by user with name command */
     union {
         shMonsterIlk *mCorpseIlk;
         shImplantIlk::Site mImplantSite;
     };
-//    shMonster *mShopKeeper;
-
-        
 
     //constructor:
     shObject () {
         mIlk = NULL; mCount = 0; mEnhancement = 0; mCharges = 0; mHP = 0; 
-        mLetter = 0; mBugginess = 0; mFlags = 0; mDamage = 0;
+        mLetter = 0; mBugginess = 0; mFlags = 0; mOwner = NULL; mDamage = 0;
         mLastEnergyBill = MAXTIME; mUserName = NULL;
 //      mShopKeeper = NULL;
     }
@@ -110,10 +107,10 @@ struct shObject : shThing
     void saveState (int fd);
     void loadState (int fd);
 
-        
-    int getDescription (char *buf, int len);
-    int getShortDescription (char *buf, int len);
-    char *getFarDescription ();
+    const char *getDescription ();
+    const char *getShortDescription ();
+    const char *getVagueDescription ();
+    //char *getFarDescription ();
     int isA (shObjectIlk *type);
     inline int isA (shObjectType type) { return mIlk->mType == type; }
     int isA (const char *ilkname);
@@ -122,7 +119,7 @@ struct shObject : shThing
     void setFlag (int id) { mFlags |= id; }
     void resetFlag (int id) { mFlags &= ~id; }
     int getMass () { return mCount * mIlk->mWeight; }
-    void name (char *newname = NULL);
+    void name (const char *newname = NULL);
     void nameIlk ();
     inline void maybeName () 
     { 
@@ -147,13 +144,14 @@ struct shObject : shThing
     inline int isCrackedKnown () { return isFooproofKnown (); }
     inline void setCrackedKnown () { setFooproofKnown (); }
     inline int isUnique () { return getIlkFlag (kUnique); }
+    inline int isUniqueKnown () { return getIlkFlag (kUnique) && getIlkFlag (kIdentified); }
     inline int isIlkKnown () { return getIlkFlag (kIdentified); }
     inline void setIlkKnown () 
     {
         setAppearanceKnown ();
         if (!isIlkKnown ()) {
             if (mIlk->mUserName) { 
-                free (mIlk->mUserName); 
+              free ((void *) mIlk->mUserName); 
                 mIlk->mUserName = NULL;
             }
         }
@@ -181,7 +179,7 @@ struct shObject : shThing
     inline int isCracked () { return isA (kFloppyDisk) && isFooproof (); }
     inline void setCracked () { setFooproof (); }    
 
-    inline int isInUse () { return getFlag (kInUse); }
+//    inline int isInUse () { return getFlag (kInUse); }
     inline int isActive () { return getFlag (kActive); }
     inline void setActive () { setFlag (kActive); mLastEnergyBill = Clock; }
     inline void resetActive () 
@@ -240,7 +238,9 @@ struct shObject : shThing
 
     inline int getConferredIntrinsics () { 
         return mIlk->mCarriedIntrinsics | 
-            (isInUse () ? mIlk->mInUseIntrinsics : 0);
+            (isWorn () ? mIlk->mWornIntrinsics : 0) |
+            (isWielded () ? mIlk->mWieldedIntrinsics : 0) |
+            (isActive () ? mIlk->mActiveIntrinsics : 0);
     }
 
     void applyConferredResistances (shCreature *target);
@@ -250,62 +250,95 @@ struct shObject : shThing
     void merge (shObject *obj); /* obj will be deleted */
     shObject *split (int count);
 
-    int these (char *buf, int buflen) {
-        int l;
+    const char *these () {
+        char *buf = GetBuf ();
         if (mCount > 1) {
-            l = snprintf (buf, buflen, "these %d ", mCount);
+            snprintf (buf, SHBUFLEN, "these %d %s", 
+                      mCount, getShortDescription ());
         } else {
-            l = snprintf (buf, buflen, "this ");
+            snprintf (buf, SHBUFLEN, "this %s", getShortDescription ());
         }
-        return l + getDescription (buf + l, buflen - l);
+        return buf;
     }
 
-    int the (char *buf, int buflen) {
-        int l;
+    const char *the () {
+        char *buf = GetBuf ();
         if (mCount > 1) {
-            l = snprintf (buf, buflen, "the %d ", mCount);
+            snprintf (buf, SHBUFLEN, "the %d %s", 
+                      mCount, getDescription ());
         } else {
-            l = snprintf (buf, buflen, "the ");
+            snprintf (buf, SHBUFLEN, "the %s", getDescription ());
         }
-        return l + getDescription (buf + l, buflen - l);
+        return buf;
     }
 
-    int an (char *buf, int buflen) {
-        char tempbuf[80];
-
-        getDescription (tempbuf, 80);
+    const char *theQuick () {
+        char *buf = GetBuf ();
         if (mCount > 1) {
-            return snprintf (buf, buflen, "%d %s", mCount, tempbuf);
+            snprintf (buf, SHBUFLEN, "the %d %s", 
+                      mCount, getShortDescription ());
         } else {
-            return snprintf (buf, buflen, "%s %s", 
-                             isUnique () ? "the" :
-                             isvowel (tempbuf[0]) ? "an" : "a", tempbuf);
+            snprintf (buf, SHBUFLEN, "the %s", getShortDescription ());
         }
+        return buf;
     }
 
-    int inv (char *buf, int buflen);
+    const char *an () {
+        char *buf = GetBuf ();
+        const char *tmp = getDescription ();
 
-    int your (char *buf, int buflen) {
-        int l;
         if (mCount > 1) {
-            l = snprintf (buf, buflen, "your %d ", mCount);
+            snprintf (buf, SHBUFLEN, "%d %s", mCount, tmp);
         } else {
-            l = snprintf (buf, buflen, "your ");
+            snprintf (buf, SHBUFLEN, "%s %s", 
+                      isUniqueKnown () ? "the" :
+                      isvowel (tmp[0]) ? "an" : "a", tmp);
         }
-        return l + getShortDescription (buf + l, buflen - l);
+        return buf;
     }
 
-    int her (char *buf, int buflen, shCreature *owner) {
-        int l;
-        char pronoun[4] = "his";
+    const char *anQuick () {
+        char *buf = GetBuf ();
+        const char *tmp = getShortDescription ();
+
         if (mCount > 1) {
-            l = snprintf (buf, buflen, "%s %d ", pronoun, mCount);
+            snprintf (buf, SHBUFLEN, "%d %s", mCount, tmp);
         } else {
-            l = snprintf (buf, buflen, "%s ", pronoun);
+            snprintf (buf, SHBUFLEN, "%s %s", 
+                      isUniqueKnown () ? "the" :
+                      isvowel (tmp[0]) ? "an" : "a", tmp);
         }
-        return l + getShortDescription (buf + l, buflen - l);
+        return buf;
     }
 
+    const char *anVague () {
+        char *buf = GetBuf ();
+        const char *tmp = getVagueDescription ();
+        if (mCount > 1) {
+            snprintf (buf, SHBUFLEN, "%d %s", mCount, tmp);
+        } else {
+            snprintf (buf, SHBUFLEN, "%s %s", 
+                      isUniqueKnown () ? "the" :
+                      isvowel (tmp[0]) ? "an" : "a", tmp);
+        }
+        return buf;
+    }
+
+    const char *inv ();
+
+    const char *your () {
+        char *buf = GetBuf ();
+        if (mCount > 1) {
+            snprintf (buf, SHBUFLEN, "your %d %s", 
+                      mCount, getShortDescription ());
+        } else {
+            snprintf (buf, SHBUFLEN, "your %s", 
+                      getShortDescription ());
+        }
+        return buf;
+    }
+
+    const char *her (shCreature *owner);
 
     /* any object can be used as a weapon, so we supply these routines: */
     int getThreatRange (shCreature *target);
@@ -350,6 +383,7 @@ shObject *createImplant (char *desc = NULL,
                          int count = -22, int bugginess = -2, 
                          int enhancement = -22, int charges = -22);
 shObject *createCorpse (shCreature *m);
+shObject *createEnergyCell (int count = -22);
 
 
 void makePlural (char *buf, int len);
@@ -371,9 +405,12 @@ void initializeRayGuns ();
 void initializeCanisters ();
 void initializeFloppyDisks ();
 void initializeImplants ();
+void initializeEnergy ();
 void initializeWreck ();
 void initializeArtifacts ();
 void initializeObjects ();
+
+void purgeDeletedObjects ();
 
 extern shObject *TheNothingObject;
 

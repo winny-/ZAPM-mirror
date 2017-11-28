@@ -6,7 +6,7 @@
 
 shGlyph ObjectGlyphs[kMaxObjectType];
 
-char ObjectSymbols[] = { '9', '$', '+', '?', '!', '(', ']', 
+char ObjectSymbols[] = { '9', '$', '+', '?', '!', '(', '[', 
                          ')', '=', '%', '&', '/' };
 
 
@@ -106,6 +106,17 @@ shObjectDescData BeltData[5] =
     { "old belt", kBrightGreen },
 };
 
+shMedicalProcedureDescData MedicalProcedureData[10] =
+{
+    { "SNU-???", 0 },
+    { "THERAC-25", 0 },
+    { "JARVIK 7", 0 },
+    { "PFAZER", 0 },
+    { "PNLS DTH", 0 },
+    { "NACSTAC", 0 }
+};
+
+
 void
 randomizeIlkNames ()
 {
@@ -115,6 +126,7 @@ randomizeIlkNames ()
     shuffle (RayGunData, 11, sizeof (shObjectDescData));
     shuffle (JumpsuitData, 4, sizeof (shObjectDescData));
     shuffle (BeltData, 2, sizeof (shObjectDescData));
+    shuffle (MedicalProcedureData, kMedMaxService, sizeof (shMedicalProcedureDescData)); 
 }
 
 
@@ -192,6 +204,7 @@ initializeObjects ()
     initializeImplants ();
     initializeWreck ();
     initializeArtifacts ();
+    initializeEnergy ();
 };
 
 
@@ -248,11 +261,16 @@ shObjectIlk::isA (shObjectIlk *ilk)
 }
 
 
+
+/* FIXME: this doesn't work for parent ilks, because findAnIlk() might
+          return a descendant ilk.
+*/
 int
 shObject::isA (const char *ilkname)
 {
     shObjectIlk *ilk = NULL;
     if (0 == strcmp (ilkname, "buckazoid")) ilk = &MoneyIlk;
+    if (0 == strcmp (ilkname, "energy cell")) ilk = &EnergyCellIlk;
     if (!ilk) ilk = findAnIlk (&WeaponIlks, ilkname);
     if (!ilk) ilk = findAnIlk (&ArmorIlks, ilkname);
     if (!ilk) ilk = findAnIlk (&CanisterIlks, ilkname);
@@ -266,23 +284,21 @@ shObject::isA (const char *ilkname)
 
 
 void
-shObject::name (char *newname)
+shObject::name (const char *newname)
 {
     if (!newname) {
         char prompt[80];
         char buf[80];
 
-        these (buf, 80);
-        snprintf (prompt, 80, "Name %s:", buf);
-        if (!I->getStr (buf, 80, prompt)) {
+        snprintf (prompt, 80, "Name %s:", these ());
+        if (!I->getStr (buf, 40, prompt)) {
             I->p ("Never mind.");
             return;
-        } else {
-            newname = buf;
-        }
+        } 
+        newname = buf;
     }
     if (mUserName) {
-        free (mUserName);
+      free ((void *) mUserName);
     }
     if (1 == strlen (newname) && ' ' == *newname) { 
         mUserName = NULL;
@@ -297,20 +313,21 @@ shObject::nameIlk ()
 {
     char prompt[80];
     char buf[80];
-    char *tmp;
+    const char *tmp;
+    const char *desc;
 
     tmp = mIlk->mUserName;
     mIlk->mUserName = NULL;
-    getShortDescription (buf, 80);
+    desc = getShortDescription ();
     mIlk->mUserName = tmp;
         
-    snprintf (prompt, 80, "Call %s:", buf);
-    if (!I->getStr (buf, 80, prompt)) {
+    snprintf (prompt, 80, "Call %s:", desc);
+    if (!I->getStr (buf, 40, prompt)) {
         I->p ("Never mind.");
         return;
     }
     if (mIlk->mUserName) {
-        free (mIlk->mUserName);
+      free ((void *) mIlk->mUserName);
     }
     if (1 == strlen (buf) && ' ' == *buf) { 
         mIlk->mUserName = NULL;
@@ -320,46 +337,80 @@ shObject::nameIlk ()
 }
 
 
-int
-shObject::getShortDescription (char *buf, int len)
+const char *
+shObject::getVagueDescription ()
 {
-    int l = 0;
-
-    if (mIlk->mUserName) {
-        l += snprintf (buf + l, len - l, 
-                       isIlkKnown () ? mIlk->mName : mIlk->mVagueName);
-        if (mCount > 1) {
-            makePlural (buf, len);
-            ++l;
-        }
-        l += snprintf (buf + l, len - l, " called %s", mIlk->mUserName);
-    } else {
-        l += snprintf (buf + l, len - l, 
-                       isIlkKnown () ? mIlk->mName : mIlk->mAppearance);
-        if (mCount > 1) {
-            makePlural (buf, len);
-            ++l;
-        }
-    }
-    return l;
+    return mIlk->mVagueName;
 }
 
 
-int
-shObject::getDescription (char *buf, int len)
+const char *
+shObject::getShortDescription ()
 {
     int l = 0;
-    char *fooproof = NULL;
-    char *dmg;
+    char *buf = GetBuf ();
 
-    if (Hero.hasBugSensing ()) {
-        setBugginessKnown ();
+    if (mIlk->mUserName) {
+        l += snprintf (buf + l, SHBUFLEN - l, "%s",
+                       isIlkKnown () ? mIlk->mName : mIlk->mVagueName);
+        if (mCount > 1) {
+            makePlural (buf, SHBUFLEN);
+            ++l;
+        }
+        l += snprintf (buf + l, SHBUFLEN - l, " called %s", mIlk->mUserName);
+    } else {
+        l += snprintf (buf + l, SHBUFLEN - l, "%s",
+                       isIlkKnown () ? mIlk->mName : mIlk->mAppearance);
+        if (mCount > 1) {
+            makePlural (buf, SHBUFLEN);
+            ++l;
+        }
     }
+    return buf;
+}
+
+
+static const char *
+energyFormat (shEnergyType t) {
+    switch (t) {
+    case kSlashing: 
+    case kPiercing:
+    case kConcussive:
+    case kForce:
+    case kLaser:
+        return "%dd%d";
+    case kBlinding: return NULL;
+    case kBurning: return "%dd%d fire";
+    case kConfusing: return NULL;
+    case kCorrosive: return "%dd%d acid";
+    case kElectrical: return "%dd%d shock";
+    case kFreezing: return "%dd%d ice";
+    case kMagnetic: return "%dd%d gauss";
+    case kParalyzing: return NULL;
+    case kPoisonous: return "%dd%d poison";
+    case kRadiological: return NULL;
+    case kPsychic: return NULL;
+    case kStunning: return NULL;;
+    default:
+        return NULL;
+    }
+    return NULL;
+}
+
+
+
+const char *
+shObject::getDescription ()
+{
+    int l = 0;
+    const char *fooproof = NULL;
+    const char *dmg;
+    char *buf = GetBuf ();
 
     if (isBugginessKnown () && !isBugProof ()) {
-        l += snprintf (buf + l, len - l, isBuggy () ? "buggy " : 
-                                         isOptimized () ? "optimized " : 
-                                         "debugged ");
+        l += snprintf (buf + l, SHBUFLEN - l, "%s",
+                       isBuggy () ? "buggy " : 
+                       isOptimized () ? "optimized " : "debugged ");
     }
 
     switch (vulnerability ()) {
@@ -369,9 +420,9 @@ shObject::getDescription (char *buf, int len)
     }
 
     switch (mDamage) {
-    case 1: l += snprintf (buf + l, len - l, "%s ", dmg); break;
-    case 2: l += snprintf (buf + l, len - l, "very %s ", dmg); break;
-    case 3: l += snprintf (buf + l, len - l, "extremely %s ", dmg); break;
+    case 1: l += snprintf (buf + l, SHBUFLEN - l, "%s ", dmg); break;
+    case 2: l += snprintf (buf + l, SHBUFLEN - l, "very %s ", dmg); break;
+    case 3: l += snprintf (buf + l, SHBUFLEN - l, "extremely %s ", dmg); break;
     default: 
         if (isA (kFloppyDisk) && isCrackedKnown () && isCracked ()) {
             fooproof = "cracked";
@@ -380,102 +431,146 @@ shObject::getDescription (char *buf, int len)
     }
 
     if (isFooproof () && isFooproofKnown ()) {
-        l += snprintf (buf + l, len - l, "%s ", fooproof); 
+        l += snprintf (buf + l, SHBUFLEN - l, "%s ", fooproof); 
     }
 
     if (isEnhanceable () && isEnhancementKnown ()) {
-        l += snprintf (buf + l, len - l, "%s%d ", mEnhancement < 0 ? "" : "+",
-                       mEnhancement);
+        l += snprintf (buf + l, SHBUFLEN - l, "%s%d ", 
+                       mEnhancement < 0 ? "" : "+", mEnhancement);
     }
 
     if (&WreckIlk == mIlk) {
-        l += snprintf (buf + l, len - l, "disabled %s", mCorpseIlk->mName);
+        l += snprintf (buf + l, SHBUFLEN - l, "disabled %s", mCorpseIlk->mName);
         if (mCount > 1) {
-            makePlural (buf, len);
+            makePlural (buf, SHBUFLEN);
             ++l;
         }
     } else if (!isAppearanceKnown ()) {
-        l += snprintf (buf + l, len - l, "%s", mIlk->mVagueName);
+        l += snprintf (buf + l, SHBUFLEN - l, "%s", mIlk->mVagueName);
         if (mCount > 1) {
-            makePlural (buf, len);
+            makePlural (buf, SHBUFLEN);
             ++l;
         }
     } else if (mIlk->mUserName) {
-        l += snprintf (buf + l, len - l, 
+        l += snprintf (buf + l, SHBUFLEN - l, "%s",
                        isIlkKnown () ? mIlk->mName : mIlk->mVagueName);
         if (mCount > 1) {
-            makePlural (buf, len);
+            makePlural (buf, SHBUFLEN);
             ++l;
         }
-        l += snprintf (buf + l, len - l, " called %s", mIlk->mUserName);
+        l += snprintf (buf + l, SHBUFLEN - l, " called %s", mIlk->mUserName);
     } else {
-        l += snprintf (buf + l, len - l, 
+        l += snprintf (buf + l, SHBUFLEN - l, "%s",
                        isIlkKnown () ? mIlk->mName : mIlk->mAppearance);
         if (mCount > 1) {
-            makePlural (buf, len);
+            makePlural (buf, SHBUFLEN);
             ++l;
         }
     }
+
+    if (GodMode && isIlkKnown () && isA (kWeapon)) {
+        shWeaponIlk *wilk = (shWeaponIlk *) mIlk;
+        const char *format = 
+            energyFormat ((shEnergyType) wilk->mAttack.mDamage[0].mEnergy);
+        if (format) {
+            l += snprintf (buf + l, SHBUFLEN - l, " ("); 
+            if (wilk->mAmmoBurst > 1 && &EnergyCellIlk != wilk->mAmmoType)
+                l += snprintf (buf + l, SHBUFLEN - l, "%dx", 
+                               wilk->mAmmoBurst); 
+            l += snprintf (buf + l, SHBUFLEN - l, format, 
+                           wilk->mAttack.mDamage[0].mNumDice, 
+                           wilk->mAttack.mDamage[0].mDieSides);
+            format = 
+                energyFormat ((shEnergyType) wilk->mAttack.mDamage[1].mEnergy);
+            if (format) {
+                l += snprintf (buf + l, SHBUFLEN - l, " + "); 
+                l += snprintf (buf + l, SHBUFLEN -l, format, 
+                               wilk->mAttack.mDamage[1].mNumDice, 
+                               wilk->mAttack.mDamage[1].mDieSides);
+            }
+            l += snprintf (buf + l, SHBUFLEN - l, ")"); 
+        }
+    }
+
     if (mUserName) {
-        l += snprintf (buf + l, len - l, " named %s", mUserName);
+        l += snprintf (buf + l, SHBUFLEN - l, " named %s", mUserName);
     }
 
     if (isChargeable () && isChargeKnown () && !isA ("empty ray gun")) {
-        l += snprintf (buf + l, len - 1, " (%d charg%s)", mCharges,
+        l += snprintf (buf + l, SHBUFLEN - 1, " (%d charg%s)", mCharges,
                        mCharges == 1 ? "e" : "es");
     }
-    buf[len-1] = 0;
-    return l;
+    buf[SHBUFLEN-1] = 0;
+    return buf;
 }
 
 
-int 
-shObject::inv (char *buf, int buflen) 
+const char *
+shObject::inv () 
 {
-    char tempbuf[80];
+    char *buf = GetBuf ();
     int l;
 
-    getDescription (tempbuf, 80);
-    
     if (mCount > 1) {
-        l = snprintf (buf, buflen, "%d %s", mCount, tempbuf);
+        l = snprintf (buf, SHBUFLEN, "%d %s", mCount, getDescription ());
     } else {
-        l = snprintf (buf, buflen, "%s %s", 
-                      isUnique () ? "the" :
-                      isvowel (tempbuf[0]) ? "an" : "a", tempbuf);
+        const char *tmp = getDescription ();
+        l = snprintf (buf, SHBUFLEN, "%s %s", 
+                      isUniqueKnown () ? "the" : 
+                      isvowel (tmp[0]) ? "an" : "a", tmp);
     }
     if (isWorn ()) {
         if (isA (kImplant)) {
-            l += snprintf (buf + l, buflen - l, " (installed in %s)",
+            l += snprintf (buf + l, SHBUFLEN - l, " (implanted in %s)",
                            describeImplantSite (mImplantSite));
         } else {
-            l += snprintf (buf + l, buflen - l, " (worn)");
+            l += snprintf (buf + l, SHBUFLEN - l, " (worn)");
         }
     } else if (isWielded ()) {                    
-        l += snprintf (buf + l, buflen - l, " (wielded");
+        l += snprintf (buf + l, SHBUFLEN - l, " (wielded");
         if (isSelectiveFireWeapon ()) {
-            l += snprintf (buf + l, buflen - l, ", %s",
+            l += snprintf (buf + l, SHBUFLEN - l, ", %s",
                            isToggled () ? "burst mode" : "single fire");
         }
-        l += snprintf (buf + l, buflen - l, ")");
+        l += snprintf (buf + l, SHBUFLEN - l, ")");
     }
     if (isActive ()) {
-        l += snprintf (buf + l, buflen - 1, " (activated)");
+        l += snprintf (buf + l, SHBUFLEN - 1, " (activated)");
     }
     if (isUnpaid ()) {
-        l += snprintf (buf + l, buflen - 1, " (unpaid, $%d)", 
+        l += snprintf (buf + l, SHBUFLEN - 1, " (unpaid, $%d)", 
                        mCount * mIlk->mCost);
     }
     if (isToggled ()) {
         if (isA ("geiger counter")) {
-            l += snprintf (buf + l, buflen - 1, " (clicking)");            
+            l += snprintf (buf + l, SHBUFLEN - 1, " (clicking)");            
         }
     }
 /*  if (GodMode) {
-        l += snprintf (buf + l, buflen - l, " (%d g)", getMass ());
+        l += snprintf (buf + l, SHBUFLEN - l, " (%d g)", getMass ());
     }*/
-    buf[buflen-1] = 0;
-    return l;
+    buf[SHBUFLEN-1] = 0;
+    return buf;
+}
+
+
+const char *
+shObject::her (shCreature *owner)
+{
+    char *buf = GetBuf ();
+    int l;
+    const char *pronoun = "its";
+    if (kFemale == owner->mGender) 
+        pronoun = "her";
+    else if (kMale == owner->mGender) 
+        pronoun = "his";
+    if (mCount > 1) {
+        l = snprintf (buf, SHBUFLEN, "%s %d %s", 
+                      pronoun, mCount, getDescription ());
+    } else {
+        l = snprintf (buf, SHBUFLEN, "%s %s", pronoun, getDescription ());
+    }
+    return buf;
 }
 
 
@@ -505,12 +600,19 @@ shObject::canMerge (shObject *obj)
 }
 
 
+static shObjectVector DeletedObjects;
+
 void
 shObject::merge (shObject *obj)
 {
     if (obj == this) return;
     mCount += obj->mCount;
-    delete obj;
+    /* HACK: don't delete the object right away; we might need to use
+       it to print a message or something.  (For example, the case of
+       a shopkeeper giving a quote about an object picked up in a
+       shop.) */
+    DeletedObjects.add (obj);
+    //delete obj;
 }
 
 
@@ -533,6 +635,7 @@ shObject::split (int count)
 }
 
 
+/* returns number of objects destroyed from stack */
 int
 shObject::sufferDamage (shAttack *attack, int x, int y, 
                         int multiplier, int specialonly)
@@ -540,12 +643,22 @@ shObject::sufferDamage (shAttack *attack, int x, int y,
     int j;
     int damage;
     int totaldamage = 0;
-    char buf[64];
-    
+    int cansee = Hero.canSee (x, y);
+    int numdestroyed = RNG (1,2);
+    int nearby = distance (&Hero, x, y) <= 30;
+    const char *theobj;
+
     if (Hero.owns (this)) {
-        your (buf, 64);
+        cansee = 1;
+        theobj = your ();
+    } else if (mOwner) {
+        theobj = her (mOwner);
     } else {
-        the (buf, 64);
+        theobj = theQuick ();
+    }
+
+    if (numdestroyed > mCount) {
+        numdestroyed = mCount;
     }
 
     for (j = 0; j < 2; j++) {
@@ -554,36 +667,42 @@ shObject::sufferDamage (shAttack *attack, int x, int y,
         if (kNoEnergy == energy) {
             break;
         } else if (kCorrosive == energy) {
+            if (!Hero.owns (this)) 
+                cansee = 0; /* reduce messages */
             if (kCorrosive == vulnerability ()) {
                 if (isFooproof ()) {
-                    setFooproofKnown ();
-                    I->p ("Somehow, %s is not affected.", buf);
+                    if (cansee) {
+                        setFooproofKnown ();
+                        I->p ("Somehow, %s is not affected.", theobj);
+                    }
                     continue;
                 }
                 if (isOptimized () && RNG (4)) {
-                    I->p ("Somehow, %s is not affected.", buf);
+                    if (cansee) {
+                        I->p ("Somehow, %s is not affected.", theobj);
+                    }
                     continue;
                 }
-                ++mDamage;
-                I->debug ("corroded %s %d", buf, mDamage);
-                if (Hero.canSee (x, y)) {
+                if (mDamage < 3)
+                    ++mDamage;
+                I->debug ("corroded %s %d", theobj, mDamage);
+                if (cansee) {
                     switch (mDamage) {
                     case 1:
-                        I->p ("%s corrodes!", buf); break;
+                        I->p ("%s corrodes!", theobj); break;
                     case 2:
-                        I->p ("%s corrodes some more!", buf); break;
+                        I->p ("%s corrodes some more!", theobj); break;
                     default:
-                        mDamage = 3;
-                        I->p ("%s is thoroughly corroded!", buf); break;
+                        I->p ("%s is thoroughly corroded!", theobj); break;
 #if 0               /* this makes it too easy to dispose of a welded weapon */
                     default:
-                        I->p ("%s dissolves completely!", buf);
+                        I->p ("%s dissolves completely!", theobj);
                         return 1;
 #endif
                     }
                 }
-            } else if (Hero.canSee (x, y)) {
-                I->p ("%s is not affected.", buf);
+            } else if (cansee) {
+                I->p ("%s is not affected.", theobj);
             }
         } else if (kElectrical == energy) {
             if (kElectrical == vulnerability ()) {
@@ -592,11 +711,11 @@ shObject::sufferDamage (shAttack *attack, int x, int y,
                 totaldamage += damage;
                 totaldamage -= mIlk->mHardness;
                 if (totaldamage > mHP) {
-                    if (Hero.canSee (x, y)) {
+                    if (cansee) {
                         if (Hero.owns (this) && isWorn ()) {
                             I->p ("%s is ejected from your %s in a shower of "
                                   "sparks!", 
-                                  buf, describeImplantSite (mImplantSite));
+                                  theobj, describeImplantSite (mImplantSite));
                             Hero.doff (this);
                             return 0;
                         }
@@ -609,17 +728,52 @@ shObject::sufferDamage (shAttack *attack, int x, int y,
             }
         } else if (kBurning == energy) {
             if (isA (kFloppyDisk)) {
-                if (1 == mCount ) {
-                    I->p ("%s melts!", buf);
-                } else {
-                    I->p ("One of %s melts!", buf);
+                if (cansee) {
+                    if (1 == mCount) {
+                        I->p ("%s melts!", theobj);
+                    } else if (1 == numdestroyed) {
+                        I->p ("One of %s melts!", theobj);
+                    } else if (numdestroyed == mCount) {
+                        I->p ("%s melt!", theobj);
+                    } else {
+                        I->p ("Some of %s melt!", theobj);                        
+                    }
+                } else if (nearby) { /* FIXME: no msg needed when underwater*/
+                    I->p ("You smell burning plastic.");
                 }
-                return 1;
+                return numdestroyed;
+            }
+        } else if (kFreezing == energy) {
+            if (isA (kCanister) && !isA ("canister of liquid nitrogen")) {
+                if (cansee) {
+                    if (1 == mCount ) {
+                        I->p ("%s freezes and shatters!", theobj);
+                    } else if (1 == numdestroyed) {
+                        I->p ("One of %s freezes and shatters!", theobj);
+                    } else if (numdestroyed == mCount) {
+                        I->p ("%s freeze and shatter!", theobj);
+                    } else {
+                        I->p ("Some of %s freeze and shatter!", theobj);
+                    }
+                } else if (nearby) { /* FIXME: no msg when in vacuum */
+                    I->p ("You hear something shatter.");
+                }
+                return numdestroyed;
+            }
+	} else if (kMagnetic == energy) {
+            /* FIXME: clerkbot should get mad if this is hero's fault */
+            mEnhancement /= 2;
+            mBugginess = 0;
+            if (isA (kFloppyDisk) && !(isA ("blank floppy disk"))) {
+                mIlk = findAnIlk (&FloppyDiskIlks, "blank floppy disk");
+                resetFlag (kFooproof);
             }
         } else if (kBugging == energy) {
             if (isOptimized ()) setDebugged ();
             else setBuggy ();
         } else if (specialonly) {
+            continue;
+        } else if (kConcussive == energy && kLeather == mIlk->mMaterial) {
             continue;
         } else {
             damage = NDX (multiplier * attack->mDamage[j].mNumDice,
@@ -639,7 +793,9 @@ shObject::sufferDamage (shAttack *attack, int x, int y,
     mHP -= totaldamage;
     if (mHP <= 0) {
         mHP = 0;
-        I->p ("%s is destroyed!", buf);
+        if (cansee) {
+            I->p ("%s is destroyed!", theobj);
+        }
         return 1;
     }
     return 0;    
@@ -739,7 +895,7 @@ findAnIlk (shVector <shObjectIlk *> *ilks, const char *name, int abstractokay)
     int i;
     for (i = 0; i < ilks->count (); i++) {
         shObjectIlk *ilk = ilks->get (i);
-        if (0 == strcmp (name, ilk->mName)) {
+        if (0 == strcasecmp (name, ilk->mName)) {
             if (!abstractokay || ilk->mProbability < 0) {
                 /* an abstract ilk; find a sub-ilk */
                 shVector <shObjectIlk *> subilks;
@@ -787,6 +943,8 @@ generateObject (int level)
             return createWeapon ();
         } else if (type < 45) {
             return createArmor ();
+        } else if (type < 48) {
+            return createEnergyCell ();
         } else if (type < 60) {
             return createTool ();
         } else if (type < 75) {
@@ -829,3 +987,10 @@ compareObjects (shObject **obj1, shObject **obj2)
 }
 
 
+void
+purgeDeletedObjects ()
+{
+    while (DeletedObjects.count ()) {
+        delete DeletedObjects.removeByIndex(0);
+    }
+}

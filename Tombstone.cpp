@@ -9,7 +9,11 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
@@ -57,15 +61,34 @@ copystr (char *dest, char *src, int len)
 }
 
 
+const char *
+shMapLevel::getDescription ()
+{
+    switch (Level->mType) {
+    case shMapLevel::kTown: return "in Robot Town";
+    case shMapLevel::kRadiationCave: return "in the Gamma Caves";
+    case shMapLevel::kMainframe: return "in the Mainframe";
+    case shMapLevel::kRabbit: return "in the Rabbit's Hole";
+    case shMapLevel::kSewer: return "in the sewer";
+    case shMapLevel::kSewerPlant: 
+        return "in the waste treatment plant";
+    default:
+        return "in the space base";
+    }
+}
+
 
 void
-shHero::deathMessage (char *buf, int len, shCauseOfDeath how, char *killer)
+shHero::epitaph (char *buf, int len, shCauseOfDeath how, const char *killer)
 {
 
     switch (how) {
     case kSlain:
     case kKilled:
-        snprintf (buf, len, "Killed by %s", killer ? killer : "a monster");
+      if (killer && !strcasecmp (killer, "a dalek")) 
+            snprintf (buf, len, "Exterminated by %s", killer);
+        else 
+            snprintf (buf, len, "Killed by %s", killer ? killer : "a monster");
         break;
     case kAnnihilated:
         snprintf (buf, len, "Annihilated by %s", 
@@ -83,6 +106,12 @@ shHero::deathMessage (char *buf, int len, shCauseOfDeath how, char *killer)
     case kSuicide:
         snprintf (buf, len, "Committed suicide");
         break;
+    case kDrowned:
+        snprintf (buf, len, "Drowned %s", killer);
+        break;
+    case kBrainJarred:
+        snprintf (buf, len, "Brain-napped by %s", killer);
+        break;
     case kMisc:
         snprintf (buf, len, "%s", killer);
         break;
@@ -90,11 +119,12 @@ shHero::deathMessage (char *buf, int len, shCauseOfDeath how, char *killer)
         snprintf (buf, len, "Quit");
         break;
     case kWonGame:
-        snprintf (buf, len, "Won the game");
+        snprintf (buf, len, "Activated the Bizarro Orgasmatron");
         break;
     }
 
-    snprintf (&buf[strlen (buf)], len, " on maze level %d.", Level->mDLevel);
+    snprintf (&buf[strlen (buf)], len, " %s at depth %d.", 
+              Level->getDescription (), Level->mDLevel);
 }
 
 
@@ -116,9 +146,9 @@ shHero::tomb (char *message)
     }
     panel = new_panel (win);
 
-    wattrset (win, ColorMap[kCyan]);
+    wattrset (win, ColorMap[kBrightCyan]);
 
-    row = 4;
+    row = 3;
 
     mvwaddstr (win, row++, 6,  "            _________            ");
     mvwaddstr (win, row++, 6,  "           /         \\           ");
@@ -135,16 +165,17 @@ shHero::tomb (char *message)
     mvwaddstr (win, row++, 6, "      |                   |      ");
     mvwaddstr (win, row++, 6, "      |                   |      ");
     mvwaddstr (win, row++, 6, "      |                   |      ");
+    mvwaddstr (win, row++, 6, "      |                   |      ");
     mvwaddstr (win, row++, 2, 
                "----------+-------------------+--------------------------");
 
-    row -= 9;
+    row -= 10;
 
     wattrset (win, ColorMap[kWhite]);
     snprintf (buf1, 20, "%s", mName);
     mvwaddstr (win, row, 22 - strlen (buf1) / 2, buf1);
 
-    snprintf (buf1, 18, "L%d %s", mCLevel, mProfession->mName);
+    snprintf (buf1, 18, "%s", mProfession->mTitles[mCLevel/3]);
     wattrset (win, ColorMap[kGray]);
     mvwaddstr (win, ++row, 22 - strlen (buf1) / 2, buf1);
 
@@ -214,7 +245,7 @@ displayScoreEntry (HighScoreEntry *e, int rank, int yours, WINDOW *win, int y)
 void
 shHero::logGame (char *message)
 {
-    char logname[200];
+    char logname[ZAPM_PATH_LENGTH];
     int fd;
     time_t clocktime;
     struct tm *when;
@@ -222,20 +253,26 @@ shHero::logGame (char *message)
     time (&clocktime);
     when = localtime (&clocktime);
 
-    snprintf (logname, 200, "%s/logfile.txt", DataDir);
+    snprintf (logname, sizeof(logname)-1, "%s/logfile.txt", DataDir);
     
-    fd = open (logname, O_WRONLY | O_APPEND | O_CREAT | O_BINARY, 
+    fd = open (logname, O_WRONLY | O_APPEND | O_CREAT, 
+#ifdef _WIN32
+               S_IREAD | S_IWRITE);
+#else
                S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+#endif
 
     if (-1 == fd) {
         I->p ("Couldn't open logfile.");
         I->pause ();
     } else {
-        char logstr[200];
-        snprintf (logstr, 200, "%s %04d-%02d-%02d %d %s the %s %s%s\n", 
+        char logstr[1024];
+        snprintf (logstr, sizeof(logstr), 
+                  "%s %04d-%02d-%02d %10d %2d %6d %s the %s %s%s\n", 
                   ZAPM_VERSION, 
                   when->tm_year + 1900, when->tm_mon + 1, when->tm_mday, 
-                  mScore, mName, mProfession->mTitles[mCLevel/3], 
+                  mScore, mCLevel, mXP, mName, 
+                  mProfession->mTitles[mCLevel/3], 
                   GodMode? "(godmode) " : "", message);
         write (fd, logstr, strlen (logstr));
         close (fd);
@@ -254,8 +291,14 @@ shHero::logGame (char *message)
     int entry = 0;
     int i;
 
-    snprintf (logname, 200, "%s/highscores.dat", DataDir);
-    fd = open (logname, O_RDONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH | O_BINARY);
+    snprintf (logname, sizeof(logname)-1, "%s/highscores.dat", DataDir);
+    fd = open (logname, O_RDONLY | O_BINARY, 
+#ifdef _WIN32
+        S_IREAD | S_IWRITE);
+#else
+        S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+#endif
+
     if (-1 != fd) {
         int numread;
         while (numread = read (fd, &scores[nscores], sizeof (HighScoreEntry)),
@@ -279,7 +322,11 @@ shHero::logGame (char *message)
     if (NUMHIGHSCORES == entry) {
         /* didn't make a high score */
         scores[entry].mScore = mScore;
+#ifdef _WIN32
+        scores[entry].mUid = 0;
+#else
         scores[entry].mUid = getuid ();
+#endif
         strncpy (scores[entry].mName, mName, 30);
         strncpy (scores[entry].mMessage, message, 200);
     } else {
@@ -290,12 +337,20 @@ shHero::logGame (char *message)
             memcpy (&scores[i], &scores[i-1], sizeof (HighScoreEntry));
         }
         scores[entry].mScore = mScore;
+#ifndef _WIN32
         scores[entry].mUid = getuid ();
+#else
+        scores[entry].mUid = 0;
+#endif
         strncpy (scores[entry].mName, mName, 30);
         strncpy (scores[entry].mMessage, message, 200);
 
         fd = open (logname, O_WRONLY | O_TRUNC | O_CREAT | O_BINARY, 
+#ifdef _WIN32
+                   S_IREAD | S_IWRITE);
+#else
                    S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+#endif
         if (-1 == fd) {
             I->p ("Couldn't write high score file.");
             return;
@@ -339,7 +394,7 @@ shHero::logGame (char *message)
     
     update_panels ();
     doupdate();
-    I->getChar ();
+    I->getChar (win);
     hide_panel (panel);
     del_panel (panel);
     delwin (win);

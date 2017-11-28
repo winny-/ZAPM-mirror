@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+//#include <string>
 
 void utilInitialize ();
 
@@ -17,8 +18,20 @@ extern char IsVowelLookupTable [256];
 int mini (int x, int y);
 int maxi (int x, int y);
 
+#define SHBUFLEN 256
+
+char *GetBuf ();    
+//char (*GetBuff ())[SHBUFLEN];
+
+#define YOUR(_X) ((_X)->your())
+#define THE(_X) ((_X)->the())
+#define AN(_X) ((_X)->an())
+#define THESE(_X) ((_X)->these())
+
 
 #define isvowel(_c) IsVowelLookupTable[(_c)]
+
+/* Yeah, I shoulda used the STL vector...  Eit! */
 
 template <class T>
 class shVector

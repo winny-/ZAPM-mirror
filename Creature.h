@@ -13,6 +13,11 @@ enum shActionState
 };
 
 
+enum shGender {
+    kFemale =    0x1,
+    kMale =      0x2,
+};
+
 enum shCreatureType {
     /* non-living */
     kBot,
@@ -24,7 +29,7 @@ enum shCreatureType {
     kOoze,
     /* living, and has mind: */
     kCyborg,
-    kAbberation, 
+    kAberration, 
     kAnimal,
     kAlien,
     kBeast,
@@ -38,6 +43,8 @@ enum shCreatureType {
 #define IS_PROGRAM(_crtype) (_crtype == kProgram)
 #define IS_ALIVE(_crtype) (_crtype > kConstruct)
 #define HAS_MIND(_crtype) (_crtype > kOoze)
+#define RADIATES(_crtype) (_crtype <= kDroid || \
+                           (_crtype >= kCyborg && _crtype != kAlien))
 
 
 enum shCreatureSymbols {
@@ -77,7 +84,8 @@ enum shCondition {
     kWeak =          0x600000,
     kFainting =      0xe00000, */
 
-    kFrightened =    0x1000000,
+    kFleeing =       0x1000000, /* but not necessarily frightened - for mons */
+    kFrightened =    0x2000000,
 
     kBurdened =      0x10000000,
     kStrained =      0x30000000,
@@ -132,7 +140,7 @@ struct shAbilities {
         case kInt: return mInt;
         case kWis: return mWis;
         case kCha: return mCha;
-        default: abort ();
+        default: abort (); return -1;
         }
     }
 
@@ -149,6 +157,8 @@ enum shCauseOfDeath {
     kSuddenDecompression,
     kTransporterAccident,
     kSuicide, 
+    kDrowned,
+    kBrainJarred,
     kMisc, /* miscellaneous stupid stuff, use killer text */
     kQuitGame,
     kWonGame,
@@ -160,6 +170,7 @@ enum shTimeOutType {
     ASLEEP,
     BLINDED,
     CONFUSED,
+    FLEEING,
     FRIGHTENED,
     HOSED,
     PARALYZED,
@@ -179,6 +190,7 @@ class shCreature : public shThing
 
     int mX;
     int mY;
+    int mZ; /* -1, 0, 1  for in pit, on ground, flying */
     class shMapLevel *mLevel;
     shMonsterIlk *mIlk;
 
@@ -197,6 +209,7 @@ class shCreature : public shThing
     shProfession *mProfession;
 
     char mName[30]; 
+    int mGender;
 
     int mAP;        /* action points */
     
@@ -227,17 +240,14 @@ class shCreature : public shThing
     char mInateResistances[kMaxEnergyType]; /* permanent */
     char mResistances[kMaxEnergyType];      /* inate + that from equip */
 
+    int mFeats;
     char mMutantPowers[kMaxMutantPower];
     int mHidden;             /* hide score (negative iff Hero has spotted, but
                                 monster doesn't know) */
     enum { kNothing, kObject, kFeature, kMonster } mMimic;
-    union {
-        shObjectIlk *mMimickedObject;
-        shFeature::Type mMimickedFeature;
-        shMonsterIlk *mMimickedMonster;
-    };
     shTime mSpotAttempted;   /* last time hero tried to spot creature */
     int mTrapped;            /* special trap timeout */
+    int mDrowning;           /* air left in lungs */
     int mInateIntrinsics;    /* permanent + those from mutant powers */
     int mIntrinsics;         /* inate + those gained from equipment/implants */
     int mBuggyIntrinsics;    /* TODO: gained from buggy equipment/implants */
@@ -245,6 +255,8 @@ class shCreature : public shThing
     short mRad;              /* radiation exposure */
     int mCarryingCapacity;   /* all weights are in grams */
     short mPsiModifier;      /* effect of equipment on psionic attacks */
+    short mToHitModifier;    /* effect of equipment on BAB */
+    short mDamageModifier;   /* effect of eqiupment on damage rolls */
 
     int mWeight;    
 
@@ -260,14 +272,20 @@ class shCreature : public shThing
 
     shObject *mWeapon;       /* must be the first ptr field (see save ()) */
 
-    shObject *mJumpsuit;     /* worn under armor */
+    shObject *mJumpsuit;     /* worn under body armor */
     shObject *mBodyArmor;
     shObject *mHelmet;
     shObject *mBoots;
     shObject *mGoggles;
-    shObject *mBelt;
+    shObject *mBelt; 
+
     shObject *mImplants[shImplantIlk::kMaxSite];
     
+    union {
+        shObjectIlk *mMimickedObject;
+        shFeature::Type mMimickedFeature;
+        shMonsterIlk *mMimickedMonster;
+    };
 
     shVector <TimeOut *> mTimeOuts;
     shVector <shSkill *> mSkills;
@@ -283,21 +301,23 @@ class shCreature : public shThing
     void saveState (int fd);
     void loadState (int fd);
 
-    int isA (char *ilk);
+    int isA (const char *ilk);
 
     virtual int isHero () { return 0; }
-    virtual char *the (char *buff, int len) = 0;
-    virtual char *an (char *buff, int len) = 0;
-    virtual char *your (char *buff, int len) = 0;
-    virtual char *getDescription (char *buff, int len) = 0;
-    virtual char *herself ();
+    virtual const char *the () = 0;
+    virtual const char *an () = 0;
+    virtual const char *your () = 0;
+    virtual const char *getDescription () = 0;
+    virtual const char *herself ();
 
     virtual int interrupt () { return 0; }
+
+    virtual const char *her (const char *thing);
 
     int reflexSave (shAttack *attack, int DC);
     int willSave (int DC);
 
-    int reflectAttack (shAttack *attack);
+    int reflectAttack (shAttack *attack, shDirection *dir);
     //RETURNS: 1 if attack kills us; o/w 0
     int sufferAbilityDamage (shAbilityIndex idx, int amount,
                              int ispermanent = 0);
@@ -306,11 +326,12 @@ class shCreature : public shThing
     int sufferDamage (shAttack *attack, shCreature *attacker = NULL,
                       int bonus = 0, int multiplier = 1, int divider = 1);
     //RETURNS: 1 if the creature really dies; o/w 0
-    virtual int die (shCauseOfDeath how, char *killer = NULL);
+    virtual int die (shCauseOfDeath how, const char *killer = NULL);
     virtual int die (shCauseOfDeath how, shCreature *killer) {
         return die (how, (char *) NULL);
     }
-    char *deathVerb (int presenttense = 0);
+    void pDeathMessage (const char *monname, shCauseOfDeath how, 
+                        int presenttense = 0);
 
     virtual int checkRadiation ();
 
@@ -342,7 +363,8 @@ class shCreature : public shThing
     inline int isProgram () { return IS_PROGRAM (mType); }
     inline int isRobot () { return kBot == mType || kDroid == mType; }
     inline int isInsect () { return kInsect == mType; }
-
+    inline int radiates () { return RADIATES (mType); }
+    
     virtual int isHostile () { return 0; }
 
     virtual int don (shObject *obj, int quiet = 0);
@@ -356,6 +378,8 @@ class shCreature : public shThing
     //RETURNS: 1 if successful, 0 o/w
     int openDoor (int x, int y);
     int closeDoor (int x, int y);
+
+    void shootLock (shObject *weapon, shAttack *attack, shFeature *door);
 
     virtual int numHands () { return 0; }
 
@@ -374,6 +398,7 @@ class shCreature : public shThing
 
     void computeIntrinsics ();
     void computeAC ();
+    int sewerSmells ();
 
     int getAC (int flatfooted = 0, shCreature *attacker = NULL) 
     { 
@@ -458,7 +483,24 @@ class shCreature : public shThing
     int isScary () { return mIntrinsics & kScary; }
     int hasAcidBlood () { return mIntrinsics & kAcidBlood; }
     int isMultiplier () { return mIntrinsics & kMultiplier; }
-
+    int hasAirSupply () { return mIntrinsics & kAirSupply; }
+    int isBreathless () { return mIntrinsics & kBreathless; }
+    int canSwim () { return mIntrinsics & kCanSwim; }
+    int hasNightVision () { return mIntrinsics & kNightVision; }
+    int canHideUnder (shObject *o) { return mFeats & kHideUnderObject 
+                                         && o->mIlk->mSize > getSize (); }
+    int canHideUnder (shFeature *f) { return mFeats & kHideUnderObject 
+                                          && f->isHidingSpot (); } 
+    int canHideUnderObjects () { return mFeats & kHideUnderObject; }
+    int canHideUnderWater () { return mFeats & kHideUnderObject; }
+    int canMimicMoney () { return mFeats & kMimicMoney; }
+    int canMimicObjects () { return mFeats & kMimicObject; }
+    int isExplosive () { return mFeats & kExplosive; }
+    int isSessile () { return mFeats & kSessile; }
+    int noTreasure () { return mFeats & kNoTreasure; }
+    int isUnique () { return mFeats & kUniqueMonster; }
+    int isWarpish () { return mFeats & kWarpish; }
+    int isLawyer () { return isA ("lawyer"); }
     int isMonolith () { return isA ("monolith"); }
 
     void checkConcentration ();
@@ -491,10 +533,21 @@ class shCreature : public shThing
     void makeViolated (int howlong);
     void resetViolated ();
     int isTrapped () { return mTrapped; }
+    int isUnderwater () { 
+        if (mZ >= 0 || !mLevel) return 0;
+        shFeature *f = mLevel->getFeature (mX, mY);
+        if (f && shFeature::kSewagePit == f->mType) return 1;
+        return 0;
+    }
+    void makeFleeing (int howlong);
+    void resetFleeing ();
+    int isFleeing () { return mConditions & kFleeing; }
     void makeFrightened (int howlong);
     void resetFrightened ();
     int isFrightened () { return mConditions & kFrightened; }
+
     void sterilize ();
+    void revealSelf ();
 
     int isFlankedBy (shCreature *creature = NULL) { return 0; }
     int isProne () { return 0; }
@@ -518,12 +571,12 @@ class shCreature : public shThing
             if (areAdjacent (x, y, mX, mY)) {
                 return 100;
             } else if (mLevel->isInLOS (x, y)) {
-                if (mLevel->isLit (x, y) || 
+                if (mLevel->isLit (x, y, mX, mY) || 
                     (hasLightSource () && distance (this, x, y) <= 25))
                 {
                     return 100;
                 }
-            } else if (mLevel->isLit (x, y) &&
+            } else if (mLevel->isLit (x, y, mX, mY) &&
                        hasXRayVision () && distance (this, x, y) < 25)
             {
                 return 100;
@@ -541,9 +594,28 @@ class shCreature : public shThing
         }
         if (isBlind ()) { 
             return (c->mX == mX && c->mY == mY) ? 100 : 0;
-        } else  if (c->isHero ()) {
+        } else if (c->isHero ()) {
+            if (areAdjacent (mX, mY, c->mX, c->mY))
+                return 100;
             if (Level->isInLOS (mX, mY) ||
                 (hasXRayVision () && distance (this, c->mX, c->mY) < 25))
+            {
+                return 100;
+            }
+        } else if (isHero ()) {
+            if (areAdjacent (mX, mY, c->mX, c->mY))
+                return 100;
+            if (mLevel->isInLOS (c->mX, c->mY)) {
+                if (mLevel->isLit (c->mX, c->mY, mX, mY) || 
+                    (hasLightSource () && 
+                     distance (this, c->mX, c->mY) <= 25) || 
+                    (hasNightVision () && c->radiates () &&
+                     distance (this, c->mX, c->mY) <= 100))
+                {
+                    return 100;
+                }
+            } else if (mLevel->isLit (c->mX, c->mY, mX, mY) &&
+                       hasXRayVision () && distance (this, c->mX, c->mY) < 25)
             {
                 return 100;
             }
@@ -569,19 +641,26 @@ class shCreature : public shThing
 
     int attackRoll (shAttack *attack, shObject *weapon, int attackmod, int AC,
                     shCreature *target);
-    int resolveRangedAttack (shObject *weapon, shAttack *attack, 
+    int rangedAttackHits (shAttack *attack, shObject *weapon, int attackmod,
+                          shCreature *target, int *dbonus);
+    int resolveRangedAttack (shAttack *attack, shObject *weapon, 
                              int attackmod, shCreature *target);
     int shootWeapon (shObject *weapon, shDirection dir);
-    int resolveMeleeAttack (shObject *weapon, shAttack *attack, 
+    int resolveMeleeAttack (shAttack *attack, shObject *weapon, 
                             shCreature *target);
     void projectile (shObject *obj, int x, int y, shDirection dir, 
                      shAttack *attack, int range);
     int throwObject (shObject *obj, shDirection dir);
 
+    /* can effects */
+    int healing (int hpmaxdice);
+    int fullHealing (int hpmaxdice);
+
     /* mutant powers */
     int telepathy (int on);
     int digestion (shObject *obj);
     int opticBlast (shDirection dir);
+    int shootWeb (shDirection dir);
     int hypnosis (shDirection dir);
     int xRayVision (int on);
     int mentalBlast (int x, int y);
@@ -594,6 +673,7 @@ class shCreature : public shThing
     int teleportation ();
     int telekinesis ();
     int invisibility (int on);
+    int ceaseAndDesist ();
 
     /* initialization crap */
 

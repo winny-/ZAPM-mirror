@@ -9,35 +9,31 @@
 
 #include <ctype.h>
 
-char *
-shHero::getDescription (char *buff, int buflen) 
+const char *
+shHero::getDescription () 
 {
-    snprintf (buff, buflen, "hero");
-    return buff;
+    return "hero";
 }
 
 
-char *
-shHero::the (char *buff, int buflen) 
+const char *
+shHero::the () 
 {
-    snprintf (buff, buflen, "you");
-    return buff;
+    return "you";
 }
 
 
-char *
-shHero::an (char *buff, int buflen) 
+const char *
+shHero::an () 
 {
-    snprintf (buff, buflen, "you");
-    return buff;
+    return "you";
 }
 
 
-char *
-shHero::your (char *buff, int buflen) 
+const char *
+shHero::your () 
 {
-    snprintf (buff, buflen, "you");
-    return buff;
+    return "you";
 }
 
 
@@ -58,7 +54,7 @@ shHero::gainAbility ()
         menu.addItem ('f', "Wisdom", (void *) kWis, 1);
         menu.addItem ('g', "Charisma", (void *) kCha, 1);
 
-        menuresult = menu.getResult ((void **) &choice, NULL);
+        menuresult = menu.getResult ((const void **) &choice, NULL);
     } 
     
     int oldmodifier = ABILITY_MODIFIER (mAbil.getByIndex (choice));
@@ -105,44 +101,97 @@ shHero::earnXP (int challenge)
 
 static int pickedupitem;
 
+
+void
+shHero::oldLocation (int newX, int newY, shMapLevel *newLevel)
+{
+    if (GameOver) 
+        return;
+
+    shRoom *oldroom = Level->getRoom (mX, mY); 
+    shRoom *newroom = Level->getRoom (newX, newY); 
+
+    if (oldroom == newroom) 
+        return;
+
+    if (mLevel->isInShop (mX, mY)) {
+        leaveShop ();
+    }
+    if (Level->isInHospital (mX, mY)) {
+        leaveHospital ();
+    }
+    if (Level->isInGarbageCompactor (mX, mY)) {
+        leaveCompactor ();
+    }
+}
+
+
 void
 shHero::newLocation ()
 {
-    shRoom *oldroom = Level->getRoom (mLastX, mLastY); 
+    if (!mLastLevel) mLastLevel = Level;
+    shRoom *oldroom = mLastLevel->getRoom (mLastX, mLastY); 
     shRoom *newroom = Level->getRoom (mX, mY); 
+
+//    if (mLastLevel != Level || distance (this, mLastX, mLastY) > 10) 
+    Level->computeVisibility ();
+
+    I->drawScreen ();
+    
+    if (sewerSmells () && !isSickened ()) {
+        I->p ("What a terrible smell!");
+        makeSickened (2000);
+    }
+
+    if (newroom != oldroom) { 
+        if (Level->isInShop (mX, mY)) {
+            enterShop ();
+        }
+        if (Level->isInHospital (mX, mY)) {
+            enterHospital ();
+        }
+        if (Level->isInGarbageCompactor (mX, mY)) {
+            enterCompactor ();
+        }
+        
+        if (shRoom::kNest == newroom->mType) {
+            I->p ("You enter an alien nest!");
+        }
+    }
 
     pickedupitem = 0;
     if (Flags.mAutopickup) {
         shObjectVector *v = Level->getObjects (mX, mY);
         int i;
+        int n;
 
-        if (v) for (i = 0; i < v->count (); i++) {
-            shObject *obj = v->get (i);
-            if (Flags.mAutopickupTypes[obj->mIlk->mType]) {
-                interrupt ();
-                if (!isBlind ()) obj->setAppearanceKnown ();
-                if (addObjectToInventory (obj)) {
+        if (v) {
+            n = v->count ();
+            for (i = 0; i < n; i++) {
+                shObject *obj = v->get (i);
+                if (Flags.mAutopickupTypes[obj->mIlk->mType]) {
+                    interrupt ();
+                    if (!isBlind ()) obj->setAppearanceKnown ();
+                    /* HACK: as discussed below (see case shInterface::kPickup:),
+                       remove obj from floor before attempting to add to 
+                       inventory: */
                     v->remove (obj); 
-                    --i;
-                    pickedupitem++;
-                    if (Level->isInShop (mX, mY)) {
-                        pickedUpItem (obj);
+                    if (addObjectToInventory (obj)) {
+                        --i;
+                        --n;
+                        pickedupitem++;
+                        if (Level->isInShop (mX, mY)) {
+                            pickedUpItem (obj);
+                        }
+                    } else {
+                        /* END HACK: add the object back to the end of the 
+                           vector, and don't look at it again: */
+                        v->add (obj);
+                        --n;
                     }
                 }
             }
         }
-    }
-
-    if (newroom == oldroom) return;
-    
-    if (Level->isInShop (mX, mY)) {
-        enterShop ();
-    }
-    if (mLastLevel && mLastLevel->isInShop (mLastX, mLastY)) {
-        leaveShop ();
-    }
-    if (shRoom::kNest == newroom->mType) {
-        I->p ("You enter an alien nest!");
     }
 }
 
@@ -153,13 +202,18 @@ shHero::lookAtFloor (int menuok /* = 0 */ )
     int objcnt = Level->countObjects (mX, mY);
     shObjectVector *v;
     int i;
-    char buf[50];
     shFeature *f = Level->getFeature (mX, mY);
-    
+    int feelobjs = 0;
+
     feel (mX, mY);
 
     if (0 == objcnt && !menuok && !pickedupitem) {
         return;
+    }
+    if (kSewage == Level->getSquare (mX, mY) -> mTerr) {
+        if (0 == mZ && 0 == objcnt) {
+            I->p ("You are knee deep in sewage."); 
+        } 
     }
     if (f) {
         switch (f->mType) {
@@ -185,10 +239,23 @@ shHero::lookAtFloor (int menuok /* = 0 */ )
                 I->p ("There is an acid pit here.");
             }
             break;
+        case shFeature::kSewagePit:
+            if (isTrapped ()) { 
+                I->p ("You are at the bottom of a pit of sewage."); 
+            } else {
+                I->p ("There is a pit of sewage here.");
+            }
+            break;
         case shFeature::kTrapDoor:
             I->p ("There is a trap door here."); break;
         case shFeature::kHole:
             I->p ("There is a hole here."); break;
+        case shFeature::kWeb:
+            if (isTrapped ()) 
+                I->p ("You are stuck in a web.");
+            else 
+                I->p ("There is a web here.");
+            break;
         case shFeature::kRadTrap:
             I->p ("There is a radiation trap here."); break;
         default:
@@ -197,45 +264,52 @@ shHero::lookAtFloor (int menuok /* = 0 */ )
         interrupt ();
     }
     if (0 == objcnt) return;
-    if (isBlind ()) {
+    if (Level->isWatery (mX, mY)) {
+        if (kSewage == Level->getSquare (mX, mY) -> mTerr) {
+            I->p ("You feel around in the sewage...");
+            feelobjs = 1;
+        } 
+    } else if (isBlind ()) {
         if (isFlying ()) return;
         I->p ("You feel around the floor...");
+        feelobjs = 1;
     } 
     interrupt ();
+    v = Level->getObjects (mX, mY);
+
+    for (i = 0; i < v->count (); i++) {
+        shObject *obj = v->get (i);
+        if (hasBugSensing ()) 
+            obj->setBugginessKnown ();
+        if (!feelobjs) 
+            obj->setAppearanceKnown ();
+    }
+
     if (objcnt > 4) {
         if (!menuok) {
             I->p ("There are several objects here.");
             return;
         }
         else {
-            v = Level->getObjects (mX, mY);
             shMenu menu ("Things that are here:", 
                          shMenu::kNoPick | shMenu::kCategorizeObjects);
             shObject *obj;
             for (i = 0; i < v->count (); i++) {
                 obj = v->get (i);
-                char buf[80];
-                if (!isBlind ()) obj->setAppearanceKnown ();
-                obj->an (buf, 80);
-                menu.addItem (i < 26 ? i + 'a' : i + 'A', 
-                              buf, obj, obj->mCount);
+                menu.addItem (' ', obj->an (), obj, obj->mCount);
             }
             menu.finish ();
             return;
         }
     }
-    v = Level->getObjects (mX, mY);
     if (1 == objcnt) {
-        if (!isBlind ()) v->get (0) -> setAppearanceKnown ();
-        v->get (0) -> an (buf, 50);
-        I->p ("You %s %s.", isBlind () ? "find" : "see here", buf);
+        I->p ("You %s %s.", feelobjs ? "find" : "see here", 
+              v->get (0) -> an ());
         return;
     }
     I->p ("Things that are here:");
     for (i = 0; i < objcnt; i++) {
-        if (!isBlind ()) v->get (i) -> setAppearanceKnown ();
-        v->get (i) -> an (buf, 50);
-        I->p ("%s", buf);
+        I->p (v->get (i) -> an ());
     }
 }
 
@@ -243,20 +317,19 @@ shHero::lookAtFloor (int menuok /* = 0 */ )
 int
 shHero::tryToTranslate (shCreature *c)
 {
-    char talker[50];
-    char talkerid[20];
-    char buf[50];
+#define TALKERIDLEN 20
+    char talkerid[TALKERIDLEN];
+    const char *talker = c->the ();
     int i;
 
-    c->the (talker, 50);
-    snprintf (talkerid, 50, "translate %p", c);
+    snprintf (talkerid, TALKERIDLEN, "translate %p", c);
 
     if (hasTranslation ()) {
         assert (mImplants[shImplantIlk::kLeftEar]);
 
         if (1 != getStoryFlag (talkerid)) {
-            mImplants[shImplantIlk::kLeftEar]->your (buf, 50);
-            I->p ("%s translates %s's %s:", buf, talker, 
+            I->p ("%s translates %s's %s:", 
+                  mImplants[shImplantIlk::kLeftEar]->your (), talker, 
                   c->isRobot () ? "beeps and chirps" : "alien language");
             setStoryFlag (talkerid, 1);
             mImplants[shImplantIlk::kLeftEar]->setIlkKnown ();
@@ -272,8 +345,7 @@ shHero::tryToTranslate (shCreature *c)
             distance (this, m) < 100) 
         {
             if (2 != getStoryFlag (talkerid)) {
-                m->your (buf, 50);
-                I->p ("%s translates %s's %s:", buf, talker,
+                I->p ("%s translates %s's %s:", m->your (), talker,
                       c->isRobot () ? "beeps and chirps" : "alien language");
                 setStoryFlag (talkerid, 2);
             }
@@ -284,39 +356,95 @@ shHero::tryToTranslate (shCreature *c)
 }
 
 
+int 
+shHero::looksLikeJanitor ()
+{
+    return (Hero.mWeapon && Hero.mWeapon->isA ("mop") &&
+            Hero.mJumpsuit && Hero.mJumpsuit->isA ("janitor uniform") &&
+            (Janitor == Hero.mProfession || !Hero.mBodyArmor));
+}
+
+
+void
+shHero::sensePeril ()
+{
+    int oldperil = mGoggles->isToggled ();
+    int newperil = 0;
+    shCreature *c;
+    shFeature *f;
+    int i;
+
+    if (oldperil) {
+        mGoggles->resetToggled ();
+        computeIntrinsics ();
+    }        
+
+    for (i = 0; i < Level->mCrList.count (); i++) {
+        c = Level->mCrList.get (i);
+        if (c == this || !c->isHostile () || !canSee (c->mX, c->mY)) {
+            continue;
+        }
+        newperil++;
+        goto done;
+    }
+
+    for (i = 0; i < Level->mFeatures.count (); i++) {
+        f = Level->mFeatures.get (i);
+        if (f->isTrap () && canSee (f->mX, f->mY)) {
+            newperil++;
+            goto done;
+        }
+    }
+
+done:
+    const char *your_goggles = mGoggles->your ();
+    if (!oldperil && newperil) {
+        mGoggles->setToggled ();
+        interrupt ();
+        computeIntrinsics ();
+        if (hasXRayVision ()) {
+            I->p ("%s have darkened a bit.", your_goggles);
+        } else {
+            I->p ("%s have turned black!", your_goggles);
+        }
+    } else if (oldperil && !newperil) {
+        mGoggles->resetToggled ();
+        computeIntrinsics ();
+        I->p ("%s have turned transparent.", your_goggles);
+    } else if (oldperil) {
+        mGoggles->setToggled ();
+        computeIntrinsics ();
+    }
+}
+
+
 void
 shHero::spotStuff ()
 {
     shCreature *c;
     shFeature *f;
     int i;
-    char buf[50];
-    int peril = 0;
     int sk = getSkillModifier (kSpot);
     int score;
 
-
-    if (isBlind ()) {
-        goto done;
+    if (hasPerilSensing ()) {
+        sensePeril ();
     }
+    
     for (i = 0; i < Level->mCrList.count (); i++) {
         c = Level->mCrList.get (i);
-        if (c == this || !c->isHostile () || !Level->isInLOS (c->mX, c->mY)) {
+        if (c == this || !c->isHostile () || !canSee (c->mX, c->mY)) {
             continue;
         }
-        if (hasPerilSensing ()) {
-            peril = 1;
-            break;
-        } 
-        if (c->mHidden > 0 && c->mSpotAttempted + 160000 < Clock &&
+        if (canSee (c->mX, c->mY) &&
+            c->mHidden > 0 && c->mSpotAttempted + 160000 < Clock &&
             distance (this, c->mX, c->mY) < 30) 
-        { /* note that peril-sensitive sunglasses go black before 
-             the poor hero gets a chance to notice a hidden monster */
+        {
             c->mSpotAttempted = Clock;
             score = sportingD20 () + sk;
             I->debug ("spot check: %d", score);
             if (score > c->mHidden) {
-                I->p ("You spot %s!", c->an (buf, 50));
+                I->p ("You spot %s!", c->an ());
                 c->mHidden *= -1;
                 Level->drawSq (c->mX, c->mY, 1);
                 I->pauseXY (c->mX, c->mY);
@@ -327,9 +455,6 @@ shHero::spotStuff ()
 
     for (i = 0; i < Level->mFeatures.count (); i++) {
         f = Level->mFeatures.get (i);
-        if (f->isTrap () && Level->isInLOS (f->mX, f->mY)) {
-            peril = 1;
-        }
         if (canSee (f->mX, f->mY) && 
             (f->mSpotAttempted + 160000 < Clock) &&
             (distance (this, f->mX, f->mY) < 30)) 
@@ -351,8 +476,7 @@ shHero::spotStuff ()
                 if (f->isBerserkDoor ()) {
                     I->p ("You spot a malfunctioning door!");
                 } else {
-                    f->getDescription (buf, 40);
-                    I->p ("You spot a %s!", buf);
+                    I->p ("You spot %s!", f->an ());
                 }
                 f->mTrapUnknown = 0;
                 f->mSportingChance = 0;
@@ -362,29 +486,6 @@ shHero::spotStuff ()
             }
         }
     }
-
-done:
-
-    if (hasPerilSensing ()) {
-        if (peril) {
-            if (!mGoggles->isToggled ()) {
-                mGoggles->your (buf, 50);
-                mGoggles->setToggled ();
-                interrupt ();
-                computeIntrinsics ();
-                if (hasXRayVision ()) {
-                    I->p ("%s have darkened a bit.", buf);
-                } else {
-                    I->p ("%s have turned black!", buf);
-                }
-            }
-        } else if (mGoggles->isToggled ()) {
-            mGoggles->your (buf, 50);
-            mGoggles->resetToggled ();
-            computeIntrinsics ();
-            I->p ("%s have turned transparent.", buf);
-        }
-    }
 }
 
 
@@ -392,8 +493,8 @@ done:
 int
 shHero::interrupt ()
 {
-        Level->computeVisibility ();
-        I->drawScreen ();
+    Level->computeVisibility ();
+    I->drawScreen ();
     if (mBusy) {
         mBusy = 0;
         return 1;
@@ -415,9 +516,7 @@ shHero::wield (shObject *obj, int quiet /* = 0 */ )
             return 0;
         }
         if (mWeapon->isWeldedWeapon ()) {
-            char buf[80];
-            mWeapon->your (buf, 80);
-            I->p ("%s is welded to your hand!", buf);
+            I->p ("%s is welded to your hand!", YOUR(mWeapon));
             mWeapon->setBugginessKnown ();
             return 0;
         }
@@ -443,12 +542,9 @@ shHero::wield (shObject *obj, int quiet /* = 0 */ )
         I->p ("You can't wield that because you're wearing it!");
         return 0;
     } else {
-        char buf[80];
-
         mWeapon = obj;
         if (0 == quiet) {
-            obj->an (buf, 80);
-            I->p ("You now wield %s.", buf);
+            I->p ("You now wield %s.", AN(obj));
         }
         resetStoryFlag ("strange weapon message");
         obj->setWielded ();
@@ -473,14 +569,13 @@ shHero::unwield (shObject *obj, int quiet /* = 0 */ )
 void
 shHero::drop (shObject *obj)
 {
-    char buf[80];
     shFeature *f = Level->getFeature (mX, mY);
     int iscan = obj->isA (kCanister);
 
-    obj->an (buf, 80);
+    const char *an_obj = AN (obj);
     
     if (f && shFeature::kVat == f->mType &&
-        I->yn ("%s %s into the vat?", iscan ? "Pour" : "Drop", buf))
+        I->yn ("%s %s into the vat?", iscan ? "Pour" : "Drop", an_obj))
     {
         if (obj->isA ("canister of antimatter")) {
             I->p ("The vat is annihilated!");
@@ -533,6 +628,11 @@ shHero::drop (shObject *obj)
             I->p ("You've improved the sludge recipe.");
             f->mVat.mHealthy += 2 * obj->mCount;
             obj->maybeName ();
+        } else if (obj->isA ("brain cylinder")) {
+            I->p ("You drain %s.", 
+                  obj->mCount > 1 ? "some brains" : "a brain");
+            f->mVat.mHealthy += 2 * obj->mCount;
+            obj->maybeName ();
         } else if (obj->isA ("canister of Rad-Away")) {
             I->p ("The sludge seems purified.");
             f->mVat.mHealthy += obj->mCount;
@@ -553,7 +653,7 @@ shHero::drop (shObject *obj)
         }
         delete obj;
     } else {
-        I->p ("You drop %s.", buf);
+        I->p ("You drop %s.", an_obj);
         Level->putObject (obj, mX, mY);
         if (Level->isInShop (mX, mY)) {
             maybeSellItem (obj);
@@ -575,9 +675,7 @@ shHero::listInventory ()
                      shMenu::kNoPick | shMenu::kCategorizeObjects);
         for (i = 0; i < mInventory->count (); i++) {
             obj = mInventory->get (i);
-            char buf[80];
-            obj->inv (buf, 80);
-            menu.addItem (obj->mLetter, buf, obj, obj->mCount);
+            menu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
         }
         menu.finish ();
     }
@@ -590,7 +688,6 @@ shHero::instantUpkeep ()
 {
     shObject *obj;
     int i;
-    char buf[64];
 
     for (i = mInventory->count () - 1; i >= 0; --i) {
         obj = mInventory->get (i);
@@ -604,8 +701,7 @@ shHero::instantUpkeep ()
                         gainEnergy (1);
                     } else if (0 == loseEnergy (1)) {
                         obj->resetActive ();
-                        obj->your (buf, 64);
-                        I->p ("%s has shut itself off.", buf);
+                        I->p ("%s has shut itself off.", YOUR(obj));
                     }
                     obj->mLastEnergyBill += obj->mIlk->mEnergyUse;
                 }
@@ -613,7 +709,7 @@ shHero::instantUpkeep ()
         }
     }
     if (hasAutoRegeneration ()) {
-        while (Clock - mLastRegen > 2500) {
+        while (Clock - mLastRegen > 1500) {
             if (mHP < mMaxHP) ++mHP;
             mLastRegen += 1500;
         }
@@ -638,6 +734,35 @@ shHero::feel (int x, int y, int force)
 }
 
 
+int
+shHero::tryToEscapeTrap ()
+{              
+    if (--mTrapped <= 0) {
+        if (Level->isObstacle (mX, mY)) {
+            ++mTrapped;
+        } else {
+            mZ = 0;
+            shFeature *f = Level->getFeature (mX, mY);
+            if (!f) {
+                I->p ("You can move again.");
+            } else switch (f->mType) {
+                case shFeature::kPit:
+                    I->p ("You climb out of the pit."); break;
+                case shFeature::kAcidPit:
+                    I->p ("You climb out of the acid filled pit."); break;
+                case shFeature::kSewagePit:
+                    I->p ("You swim back to shallow sewage."); break;
+                case shFeature::kWeb:
+                    I->p ("You free yourself from the web.");
+                    break;
+                default:
+                    I->p ("You can move again."); break;
+                }
+        }
+    }
+    return FULLTURN;
+}
+
 
 
 /* try to move the hero one square in the given direction
@@ -652,13 +777,12 @@ shHero::doMove (shDirection dir)
     int tx, ty;
     static int leftsq, rightsq; /* this static crap is not tasty */
     shFeature *f;
-    char buf[80];
     int speed;
 
     speed = isDiagonal (dir) ? DIAGTURN: FULLTURN;
 
     if (!Level->moveForward (dir, &x, &y)) {
-        I->p ("You can't move there!");
+        //I->p ("You can't move there!");
         return 0;
     }
 
@@ -708,7 +832,7 @@ shHero::doMove (shDirection dir)
         tx = x; ty = y;
         if (!Level->moveForward (leftTurn (dir), &tx, &ty) ||
             leftsq != Level->appearsToBeFloor (tx, ty) ||
-            Level->countObjects (tx, ty) ||
+            (Level->countObjects (tx, ty) && !Level->isWatery (tx, ty)) ||
             Level->getKnownFeature (tx, ty))
         {
             interrupt (); 
@@ -717,7 +841,7 @@ shHero::doMove (shDirection dir)
         tx = x; ty = y;
         if (!Level->moveForward (rightTurn (dir), &tx, &ty) ||
             rightsq != Level->appearsToBeFloor (tx, ty) ||
-            Level->countObjects (tx, ty) ||
+            (Level->countObjects (tx, ty) && !Level->isWatery (tx, ty)) ||
             Level->getKnownFeature (tx, ty))
         {
             interrupt (); 
@@ -730,7 +854,7 @@ trymove:
         feel (x, y);
         if (!interrupt ()) {
             if (isStunned () || isConfused () || isBlind ()) {
-                I->p ("You bump into %s", Level->the (buf, 80, x, y));
+                I->p ("You bump into %s!", Level->the (x, y));
                 return speed;
             }
         }
@@ -738,8 +862,8 @@ trymove:
         feel (x, y);
         if (!interrupt ()) {
             if (isStunned () || isConfused () || isBlind ()) {
-                I->p ("You bump into %s", 
-                      Level->getCreature (x, y) -> the (buf, 80));
+                I->p ("You bump into %s!", 
+                      THE(Level->getCreature (x, y)));
                 return speed;
             }
         }
@@ -790,28 +914,50 @@ shHero::upkeep ()
         }
     }
 
+    /* reduce police awareness of your software piracy crimes */
+    {
+        int danger = getStoryFlag ("software piracy");
+        if (danger > 0) {
+            setStoryFlag ("software piracy", --danger);
+        }
+    }
+
     /* check for alien impregnation */
     {
         int preggers = getStoryFlag ("impregnation");
 
         if (preggers > 0) {
             preggers++;
-            if (preggers > 20) {
+            if (preggers > 40) {
+                int x = Hero.mX;
+                int y = Hero.mY;
+                int queen = !RNG (0, 17);
+                shMonster *baby = 
+                    new shMonster (findAMonsterIlk (queen ? "alien princess"
+                                                          : "chestburster"));
+                Level->findNearbyUnoccupiedSquare (&x, &y);
+                if (baby) {
+                    if (Level->putCreature (baby, x, y)) {
+                        /* FIXME: something went wrong */
+                    } else {
+                        I->drawScreen ();
+                    }
+                }
                 I->p ("The alien creature explodes from your chest!");
-                /* died in childbirth? */
-                die (kSlain, "alien impregnation");
-            } else if (18 == preggers) {
+                die (kMisc, "Died during childbirth");
+            } else if (38 == preggers) {
                 I->p ("You are violently ill!");
                 makeStunned (35000);
                 interrupt ();
-            } else if (15 == preggers) {
+            } else if (35 == preggers) {
                 I->p ("You vomit!");
+                makeSickened (100000);
+                interrupt ();
+            } else if (20 == preggers) {
+                I->p ("You feel something moving inside you!");
                 interrupt ();
             } else if (10 == preggers) {
-                I->p ("You feel nauseated.");
-                interrupt ();
-            } else if (5 == preggers) {
-                I->p ("You feel something moving inside you!");
+                I->p ("You feel a little queasy.");
                 interrupt ();
             }
             setStoryFlag ("impregnation", preggers);
@@ -823,7 +969,7 @@ shHero::upkeep ()
         int r = checkRadiation ();
         int d = 0;
         while (r--) {
-            d += RNG (1, 10);
+            d += RNG (1, 3);
         }
         d -= getResistance (kRadiological);
         if (d < 0) d = 0;
@@ -852,7 +998,7 @@ shHero::upkeep ()
         if (mRad > 150) {
             int level = getStoryFlag ("radsymptom");
             if (RNG (20) + ABILITY_MODIFIER (getCon ()) <
-                mRad / 10) 
+                mRad / 12) 
             {
                 if (sufferAbilityDamage (kCon, RNG (1,2))) {
                     I->p ("You are overcome by your illness.");
@@ -863,8 +1009,7 @@ shHero::upkeep ()
                     }
                     switch (level) {
                     case 0:
-                        I->p (RNG (2) ? "You have a headache." : 
-                              "You feel tired."); break;
+                        I->p ("You feel tired."); break;
                     case 1:
                         I->p (RNG (2) ? "You feel weak." : 
                               "You feel feverish."); break;
@@ -946,31 +1091,38 @@ shHero::takeTurn ()
         int ol = getStoryFlag ("geiger counter message");
 
         if (rl != ol) {
-            char buf[80];
             int i;
             shObject *obj = NULL;
+            const char *what = NULL;
 
             for (i = 0; i < mInventory->count (); i++) {
                 obj = mInventory->get (i);
                 if (obj->isA (findAnIlk (&ToolIlks, "geiger counter", 1))) {
-                    obj->your (buf, 80);
+                    what = YOUR (obj);
                     break;
                 }
             }
             if (0 == ol) {
-                I->p ("%s is making a clicking noise.", buf);
+                interrupt ();
+                I->p ("%s is making a clicking noise.", what);
                 if (obj) obj->setToggled ();
             } else if (0 == rl) {
-                I->p ("%s has stopped clicking.", buf);
+                interrupt ();
+                I->p ("%s has stopped clicking.", what);
                 if (obj) obj->resetToggled ();
             } else if (ol < rl) {
-                I->p ("%s is clicking more rapidly.", buf);
+                interrupt ();
+                I->p ("%s is clicking more rapidly.", what);
             } else {
-                I->p ("%s is clicking more slowly.", buf);
+                interrupt ();
+                I->p ("%s is clicking more slowly.", what);
             }
         }
         setStoryFlag ("geiger counter message", rl);
     }
+
+    
+
 
     if (mBusy && !isTrapped () && !isStunned () && !isConfused ()) {
         elapsed = doMove (mDir);
@@ -1024,20 +1176,36 @@ shHero::takeTurn ()
             
         goto domove;
     }
+    case shInterface::kGlideN:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveN:
         --dy;  goto domove;
+    case shInterface::kGlideNE:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveNE:
         ++dx; --dy; goto domove;
+    case shInterface::kGlideE:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveE:
         ++dx; goto domove;
+    case shInterface::kGlideSE:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveSE:
-        ++dx; /* fall through */
+        ++dx; ++dy; goto domove;
+    case shInterface::kGlideS:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveS:
         ++dy; goto domove;
+    case shInterface::kGlideSW:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveSW:
-        ++dy; /* fall through */
+        ++dy; --dx; goto domove;
+    case shInterface::kGlideW:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveW:
         --dx; goto domove;
+    case shInterface::kGlideNW:
+        glidemode = 1; mBusy = 1; /* fall through */
     case shInterface::kMoveNW:
         --dx; --dy;
 
@@ -1045,34 +1213,50 @@ shHero::takeTurn ()
         {
             int x = mX + dx;
             int y = mY + dy;
-            char buf[50];
             shCreature *c;
+
+            if (!Level->isInBounds (x, y))
+                goto getcmd;
 
             c = Level->getCreature (x, y);
 
             if (Level->rememberedCreature (x, y) || 
+                (c && hasMotionDetection () && c->isMoving ()) ||
                 (c && !isBlind ())) 
             { /* this must be an attack */
                 if (glidemode) {
+                    glidemode = 0;
                     goto getcmd;
                 }
                 
-                if (c && c->isPet () && !isStunned () && !isConfused ()) {
-                    c->your (buf, 50);
+                if (c && c->mZ < 0 && mLevel->isObstacle (x, y)) {
+                    I->p ("You can't attack there!");
+                    goto getcmd;
+                } 
+                if (mZ < 0 && mLevel->isObstacle (mX, mY)) {
+                    if (isTrapped ())
+                        goto untrap;
+                    else
+                        goto getcmd;
+                }
+                if (c && c->isPet () && !isStunned () && !isConfused () 
+                    && !isStunned ()) 
+                {
+                    if (isTrapped ()) {
+                        goto untrap;
+                    }
                     elapsed = displace (c);
                 } else {
-                    if (c && isFrightened () && 
-                             !isConfused () && !isStunned () && !isBlind ()) 
+                    if (c && isFrightened () && !isConfused () &&
+                             !isStunned () && !isBlind ()) 
                     {
-                        c->the (buf, 50);
-                        I->p ("You are too afraid to attack %s!", buf);
+                        I->p ("You are too afraid to attack %s!", THE (c));
                         goto getcmd;
                     }
                     if (c && !c->isHostile () && !c->isA ("monolith") &&
-                        !isBlind () && !isConfused ()) 
+                        !isBlind () && !isConfused () && !isStunned ()) 
                     {
-                        c->the (buf, 50);
-                        if (!I->yn ("Really attack %s?", buf)) {
+                        if (!I->yn ("Really attack %s?", THE (c))) {
                             I->nevermind ();
                             goto getcmd;
                         }
@@ -1083,10 +1267,8 @@ shHero::takeTurn ()
                     goto getcmd;
                 }
             } else if (isTrapped ()) {
-                if (--mTrapped <= 0) {
-                    I->p ("You free yourself from the trap.");
-                }
-                elapsed = FULLTURN;
+            untrap:
+                elapsed = tryToEscapeTrap ();
             } else {
                 elapsed = doMove (vectorDirection (dx, dy));
             }
@@ -1195,7 +1377,7 @@ shHero::takeTurn ()
         if (kNoDirection == dir) {
             goto getcmd;
         } else if (kOrigin == dir) {
-            I->p ("Kicking yourself isn't going to make things any better");
+            I->p ("Kicking yourself isn't going to make things any better.");
             goto getcmd;
         }
 
@@ -1211,6 +1393,7 @@ shHero::takeTurn ()
 
         if (isFrightened ()) {
             I->p ("You are too afraid to use a raygun!"); 
+            goto getcmd;
         }
 
         selectObjects (&v, mInventory, kRayGun);
@@ -1233,6 +1416,11 @@ shHero::takeTurn ()
         shMapLevel *oldlevel = Level;
         shFeature *stairs = Level->getFeature (mX, mY);
 
+        if (mTrapped) {
+            elapsed = tryToEscapeTrap ();
+            break;
+        }
+        
         if (NULL == stairs || shFeature::kStairsUp != stairs->mType) {
             I->p ("You can't go up here.");
             goto getcmd;
@@ -1257,23 +1445,68 @@ shHero::takeTurn ()
     case shInterface::kMoveDown:
     {
         int x, y;
-        char buf[20];
         shMapLevel *oldlevel = Level;
         shFeature *stairs = Level->getFeature (mX, mY);
 
-        if (NULL == stairs || 
-            !(shFeature::kStairsDown == stairs->mType ||
-              shFeature::kTrapDoor == stairs->mType || 
-              shFeature::kHole == stairs->mType)) 
-        {
+        if (NULL == stairs) {
             I->p ("You can't go down here.");
             goto getcmd;
         }
-        stairs->the (buf, 20);
-        if (isFlying ()) {
-            I->p ("You are flying high above %s.", buf);
+        if (-1 == Hero.mZ) {
+            I->p ("You're already at the bottom.");
             goto getcmd;
         }
+
+        if (isFlying ()) {
+            I->p ("You are flying high above %s.", THE (stairs));
+            goto getcmd;
+        }
+        switch (stairs->mType) {
+        case shFeature::kHole:
+            I->p ("You jump into a hole!");
+            break;
+        case shFeature::kTrapDoor:
+            I->p ("You jump into a trap door!");
+            break;
+        case shFeature::kPit:
+            I->p ("You climb down into the pit.");
+            mZ = -1;
+            mTrapped = NDX (1, 6);
+            elapsed = FULLTURN;
+            break;
+        case shFeature::kAcidPit:
+            I->p ("You climb down into the pit.");
+            mZ = -1;
+            mTrapped = NDX (1, 6);
+            if (sufferDamage (&AcidPitTrapDamage)) {
+                die (kMisc, "Dissolved in acid");
+                return;
+            }
+            setTimeOut (TRAPPED, 1000, 0);
+            elapsed = FULLTURN;
+            break;
+        case shFeature::kSewagePit:
+            I->p ("You dive into the sewage.");
+            Hero.mZ = -1;
+            Hero.mTrapped = NDX (1, 6);
+            if (!hasAirSupply () && !isBreathless ()) {
+                I->p ("You're holding your breath!");
+                mDrowning = getCon ();
+            }
+            setTimeOut (TRAPPED, 1000, 0);
+            elapsed = FULLTURN;
+            break;
+        case shFeature::kStairsDown:
+            break;
+        default:
+            I->p ("You can't go down here.");
+            goto getcmd;
+        }
+
+        if (elapsed)
+            break;
+
+        /* o/w we are descending a level */
         Level->removeCreature (this);
         Level = Maze.get (stairs->mDest.mLevel);
         if (NULL == Level) {
@@ -1365,14 +1598,23 @@ shHero::takeTurn ()
                 goto getcmd;
             }
             if (1 == objcnt) {
-                if (!isBlind ()) v->get (0) -> setAppearanceKnown ();
+                if (!isBlind ()) 
+                    v->get (0) -> setAppearanceKnown ();
+                /* HACK: if the object is merged into an inventory object, 
+                   the the floor will momentarily contain a deleted object
+                   which would be dereferenced during the screen redraw that
+                   occurs while printing the "you picked up an object" 
+                   message.  So, we preemptively null out the floor objs: */
+                Level->setObjects (mX, mY, NULL);
                 if (1 == addObjectToInventory (v->get (0))) {
                     if (Level->isInShop (mX, mY)) {
                         pickedUpItem (v->get (0));
                     }
                     delete v;
-                    Level->setObjects (mX, mY, NULL);
+                    v = NULL;
                 }
+                /* END HACK: Restore the floor. */
+                Level->setObjects (mX, mY, v);
             }
             else {
                 int i, cnt;
@@ -1383,23 +1625,26 @@ shHero::takeTurn ()
                 v->sort (&compareObjects);
                 for (i = 0; i < v->count (); i++) {
                     obj = v->get (i);
-                    char buf[80];
-                    if (!isBlind ()) obj->setAppearanceKnown ();
-                    obj->an (buf, 80);
-                    menu.addItem (i < 26 ? i + 'a' : i + 'A', 
-                                  buf, obj, obj->mCount);
+                    int let = i % 52;
+                    menu.addItem (let < 26 ? let + 'a' : let - 26 + 'A', 
+                                  AN (obj), obj, obj->mCount);
                 }
                 objcnt = 0;
-                while (menu.getResult ((void **) &obj, &cnt)) {
+                while (menu.getResult ((const void **) &obj, &cnt)) {
                     assert (cnt);
                     ++objcnt;
+                    if (!isBlind()) 
+                        obj->setAppearanceKnown ();
                     if (cnt != obj->mCount) {
                         obj = obj->split (cnt);
-                    }
-                    else {
+                    } else {
+                        /* HACK: as above, need to pre-emptively remove the
+                           object from the floor vector even though we might 
+                           not actually pick it up: */
                         v->remove (obj);
                     }
                     if (0 == addObjectToInventory (obj)) {
+                        /* END HACK: put it back. */
                         Level->putObject (obj, mX, mY);
                     } else {
                         if (Level->isInShop (mX, mY)) {
@@ -1426,14 +1671,13 @@ shHero::takeTurn ()
         shObject *obj;
         shObject *obj2;
         char c;
-        char buf[80];
 
         obj = quickPickItem (mInventory, "adjust", shMenu::kCategorizeObjects);
         if (NULL == obj) {
             goto getcmd;
         }
         I->p ("Adjust to what letter?");
-        c = I->getChar ();
+        c = I->getChar (I->logWin());
         if (isalpha (c) && c != obj->mLetter) {
             int i;
             for (i = 0; i < mInventory->count (); i++) {
@@ -1441,16 +1685,13 @@ shHero::takeTurn ()
                 if (obj2->mLetter == c) {
                     obj2->mLetter = obj->mLetter;
                     obj->mLetter = c;
-                    obj->inv (buf, 80);
-                    I->p ("%c - %s", obj->mLetter, buf);
-                    obj2->inv (buf, 80);
-                    I->p ("%c - %s", obj2->mLetter, buf);
+                    I->p ("%c - %s", obj->mLetter, obj->inv ());
+                    I->p ("%c - %s", obj2->mLetter, obj2->inv ());
                     goto getcmd;
                 }
             }
             obj->mLetter = c;
-            obj->inv (buf, 80);
-            I->p ("%c - %s", obj->mLetter, buf);
+            I->p ("%c - %s", obj->mLetter, obj->inv ());
             goto getcmd;
         }
         I->nevermind ();
@@ -1514,13 +1755,10 @@ shHero::takeTurn ()
                          shMenu::kCategorizeObjects);
             for (i = 0; i < mInventory->count (); i++) {
                 obj = mInventory->get (i);
-                char buf[80];
-                obj->inv (buf, 80);
-                menu.addItem (obj->mLetter, buf, obj, obj->mCount);
+                menu.addItem (obj->mLetter, obj->inv (), obj, obj->mCount);
             }
             
-            while (menu.getResult ((void **) &obj, &cnt)) {
-                char buf[80];
+            while (menu.getResult ((const void **) &obj, &cnt)) {
                 if (0 == cnt) {
                     abort ();
                 }
@@ -1535,8 +1773,8 @@ shHero::takeTurn ()
                     }
                 }
                 if (obj->isWorn ()) {
-                    obj->your (buf, 80);
-                    I->p ("You can't drop %s because you're wearing it.", buf);
+                    I->p ("You can't drop %s because you're wearing it.", 
+                          YOUR (obj));
                     continue;
                 }
                 obj = removeSomeObjectsFromInventory (obj, cnt);
@@ -1565,48 +1803,52 @@ shHero::takeTurn ()
     case shInterface::kLookThere:
     {
         int x = -1, y = -1;
-        char buf[80];
-        int ofs = 0;
         while (I->getSquare ("Look at what? (select a location, '?' for help)",
-                             &x, &y, -1))
+                             &x, &y, -1, 1))
         {
             shCreature *c = Level->getCreature (x, y);
             shFeature *f = Level->getFeature (x, y);
             int seen = 0;
+            I->pageLog ();
 
-            if (c) {
-                ofs = 0;
+            //FIXME: should remember things not in LOS
+
+            if (Level->rememberedCreature (x, y)) {
+                I->p ("You remember an unseen monster there.");
+                seen++;
+            } else if (c) {
+                const char *pcf = "";
+                const char *desc = NULL;
                 if (c->isHostile ()) {
-                    ofs += strlen (c->an (&buf[ofs], 80));
+                    desc = AN (c);
                 } else {
-                    ofs += snprintf (&buf[ofs], 80 - ofs, "a peaceful ");
-                    ofs += strlen (c->getDescription (&buf[ofs], 80));
+                    pcf = "a peaceful ";
+                    desc = c->getDescription ();
                 }
                 if (canSee (c) && c->mHidden <= 0) {
+                    const char *wielding = "";
+                    const char *weapon = "";
                     if (c->mWeapon) {
-                        ofs += snprintf (&buf[ofs], 80 - ofs, ", wielding ");
-                        ofs += c->mWeapon->an (&buf[ofs], 80 - ofs);
+                        wielding = ", wielding ";
+                        weapon = AN (c->mWeapon);
                     }
-                    I->p ("You see %s.", buf);
+                    I->p ("You see %s%s%s%s.", pcf, desc, wielding, weapon);
                     seen++;
                 } else if (hasTelepathy () && c->hasMind () && 
                            distance (this, x, y) < 5 * (mCLevel + 20))
                 {
-                    I->p ("You sense %s.", buf);
+                    I->p ("You sense %s.", pcf, desc);
                     seen++;
                 } else if (hasMotionDetection () && 
                            c->isMoving () &&
                            distance (this, x, y) < 50) 
                 {
-                    I->p ("You see a blip on your motion tracker.", buf);
+                    I->p ("You see a blip on your motion tracker.");
                     seen++;
-                } else if (c->mHidden) {
+                } else if (canSee(c) && c->mHidden > 0) {
                     switch (c->mMimic) {
                     case shCreature::kObject:
-                        /* TEMP FIX FIX FIX 
-                           right now only used by creeping credits */
-                        c->mInventory->get (0) -> an (buf, 80);
-                        I->p ("You see %s.", buf);
+                        I->p ("You see %s.", c->mMimickedObject->mVagueName);
                         seen++;
                         break;
                     default:
@@ -1614,12 +1856,14 @@ shHero::takeTurn ()
                         break;
                     }
                 }
-            } else if (!canSee (x, y)) {
-                I->p ("You can't see that location from here.");
+            } 
+            if (!canSee (x, y)) {
+                if (!seen)
+                    I->p ("You can't see that location from here.");
                 continue;
             } 
 
-            if (Level->countObjects (x, y)) {
+            if (Level->countObjects (x, y) && !Level->isWatery (x, y)) {
                 shObjectVector *objs = Level->getObjects (x, y);
                 int i;
                 int besttype = kMaxObjectType;
@@ -1630,13 +1874,14 @@ shHero::takeTurn ()
                         bestobj = objs->get (i);
                     }
                 }
-                bestobj->an (buf, 80);
-                I->p ("You see %s.", buf);
+                I->p ("You see %s.", AN (bestobj));
+                seen++;
             } 
             if (f && !(f->isTrap () && f->mTrapUnknown)) {
                 switch (f->mType) {
                 case shFeature::kDoorHiddenVert:
                 case shFeature::kDoorHiddenHoriz:
+                case shFeature::kMovingHWall:
                     I->p ("You see a wall."); break;
                 case shFeature::kStairsUp:
                     I->p ("You see a staircase leading upstairs."); break;
@@ -1660,17 +1905,28 @@ shHero::takeTurn ()
                     I->p ("You see a trap door."); break;
                 case shFeature::kHole:
                     I->p ("You see a hole."); break;
+                case shFeature::kWeb:
+                    I->p ("You see a web."); break;
                 case shFeature::kRadTrap:
                     I->p ("You see a radiation trap."); break;
+                case shFeature::kSewagePit:
+                    I->p ("You see a dangerously deep pool of sewage."); break;
+                case shFeature::kMachinery:
+                    I->p ("You see pistons and machinery.");
                 }
             } else {
                 if (Level->isFloor (x, y)) {
-                    if (!seen) I->p ("You see the floor.");
+                    if (kSewage == Level->getSquare(x,y)->mTerr) {
+                        I->p ("You see a pool of sewage."); 
+                    } else if (!seen) {
+                        I->p ("You see the floor.");
+                    }
+                } else if (kVoid == Level->getSquare (x, y) ->mTerr) {
+                    I->p ("You see a yawning void.");
                 } else {
                     I->p ("You see a wall.");
                 }
             }
-            I->pause ();
         }
         I->p ("Done.");
         goto getcmd;
@@ -1679,13 +1935,13 @@ shHero::takeTurn ()
     case shInterface::kPay:
     {
         payShopkeeper ();
-        goto getcmd;
+        elapsed = 0;
+        break;
     }
 
     case shInterface::kSearch:
     {
         int x, y, sk;
-        char buf[50];
 
         sk = getSkillModifier (kSearch);
         for (x = mX - 1; x <= mX + 1; x++) {
@@ -1722,8 +1978,7 @@ shHero::takeTurn ()
                                    f->mTrapUnknown &&
                                    score >= 20)
                         {
-                            f->getDescription (buf, 40);
-                            I->p ("You find a %s trap!", buf);
+                            I->p ("You find %s!", AN (f));
                             f->mTrapUnknown = 0;
                             f->mSportingChance = 0;
                             Level->drawSqTerrain (f->mX, f->mY);
@@ -1797,7 +2052,7 @@ shHero::takeTurn ()
     }
     case shInterface::kEditSkills:
     {
-        editSkills (0);
+        editSkills ();
         goto getcmd;
     }
     case shInterface::kExecute:
@@ -1910,10 +2165,8 @@ shHero::takeTurn ()
             I->p ("You can't seem to take it off.  It must be buggy!");
             obj->setBugginessKnown ();
         } else {
-            char buf[80];
-            obj->your (buf, 80);
+            I->p ("You take off %s.", YOUR (obj));
             doff (obj);
-            I->p ("You take off %s.", buf);
         }
         elapsed = FULLTURN;
         break;
@@ -1974,9 +2227,7 @@ shHero::takeTurn ()
             I->p ("It won't come out!  It must be buggy!");
             obj->setBugginessKnown ();
         } else {
-            char buf[50];
-            obj->your (buf, 50);
-            I->p ("You uninstall %s.", buf);        
+            I->p ("You uninstall %s.", YOUR (obj)); 
             doff (obj);
         }
         elapsed = FULLTURN;
@@ -1996,7 +2247,7 @@ shHero::takeTurn ()
 
         ilk = ! I->yn ("Name an individual object?");
         obj = quickPickItem (mInventory, "name", 
-                                  shMenu::kCategorizeObjects);
+                             shMenu::kCategorizeObjects);
         if (obj) {
             if (ilk) {
                 obj->nameIlk ();
@@ -2006,6 +2257,64 @@ shHero::takeTurn ()
         }
         goto getcmd;
     }
+
+    case shInterface::kToggleAutopickup:
+        Flags.mAutopickup = !Flags.mAutopickup;
+        I->p ("Autopickup is now %s.", Flags.mAutopickup ? "ON" : "OFF");
+        goto getcmd;
+
+
+    case shInterface::kShowArmor:
+    {
+        unsigned int i;
+        shObject *objs[] = {mJumpsuit, mBodyArmor, mHelmet, 
+                            mBoots, mGoggles, mBelt };
+        int cnt = 0;
+
+        shMenu menu ("Worn Armor", 
+                     shMenu::kNoPick);
+        for (i = 0; i < sizeof(objs) / sizeof (shObject*); i++) {
+            if (objs[i]) {
+                menu.addItem (objs[i]->mLetter, objs[i]->inv (),
+                              objs[i], objs[i]->mCount);
+                cnt++;
+            }
+        }
+        if (cnt) {
+            menu.finish ();
+        } else {
+            I->p ("You aren't wearing any armor.");
+        }
+        goto getcmd;
+    }
+    case shInterface::kShowImplants:
+    {
+        int i;
+        int cnt = 0;
+
+        shMenu menu ("Installed Implants", 
+                     shMenu::kNoPick);
+        for (i = 0; i < shImplantIlk::kMaxSite; i++) {
+            if (mImplants[i]) {
+                menu.addItem (mImplants[i]->mLetter, mImplants[i]->inv (),
+                              mImplants[i], mImplants[i]->mCount);
+                cnt++;
+            }
+        }
+        if (cnt) {
+            menu.finish ();
+        } else {
+            I->p ("You don't have any implants installed.");
+        }
+        goto getcmd;
+    }
+    case shInterface::kShowWeapons:
+        if (!mWeapon) {
+            I->p ("You are empty handed.");
+        } else {
+            I->p ("%c - %s", mWeapon->mLetter,  mWeapon->inv ());
+        }
+        goto getcmd;
 
     case shInterface::kVersion:
         I->showVersion ();
@@ -2047,7 +2356,7 @@ shHero::takeTurn ()
         goto getcmd;
     }
 
-    if (0 == elapsed) {
+    if (0 == elapsed && !GameOver) {
         goto getcmd;
     } else if (elapsed > 0) {
         mAP -= elapsed;
@@ -2068,20 +2377,25 @@ shHero::takeTurn ()
 int
 shHero::die (shCauseOfDeath how, shCreature *killer)
 {
-    char buf[80];
     resetBlind ();
-    Level->setLit (killer->mX, killer->mY);
-    killer->an (buf, 80);
-    return die (how, buf);
+    Level->setLit (killer->mX, killer->mY, 1, 1, 1, 1);
+    if (this == killer)
+        return die (kKilled, her ("own weapon"));
+    return die (how, AN (killer));
 }
 
 
 int
-shHero::die (shCauseOfDeath how, char *killer)
+shHero::die (shCauseOfDeath how, const char *killer)
 {
     int won = 0;
     int died = 1;
     char message[200];
+
+    epitaph (message, 200, how, killer);
+
+    Level->computeVisibility ();
+    I->drawScreen ();
     switch (how) {
     case kSlain:
     case kKilled:
@@ -2089,6 +2403,11 @@ shHero::die (shCauseOfDeath how, char *killer)
     case kSuicide:
         I->pause ();
         I->p ("You die."); break;
+    case kBrainJarred:
+        I->p ("You are now a brain in a jar."); 
+        break;
+    case kDrowned:
+        I->p ("You drown."); break;
     case kAnnihilated:
         I->pause ();
         I->p ("You are annihilated."); break;
@@ -2128,8 +2447,10 @@ shHero::die (shCauseOfDeath how, char *killer)
 nopause:
     if (!won && SpaceMarine == mProfession) { /* YAFM */
         I->p ("Game over, man!  Game over!");
-        I->smallPause ();
+        //I->smallPause ();
     }
+    Level->clearSpecialEffects ();
+
     if (I->yn ("Do you want your possessions identified?")) {
         int i;
 
@@ -2138,10 +2459,12 @@ nopause:
         }
         listInventory ();
     }
+    if (I->yn ("Would you like to see the console message history?")) {
+        I->showHistory ();
+    }
 
     tallyScore ();
 
-    deathMessage (message, 200, how, killer);
     if (kWonGame == how || kQuitGame == how) {
 
     } else {
@@ -2161,13 +2484,14 @@ nopause:
 //REQUIRES: monster types initialized already
 
 void
-shHero::init (char *name, shProfession *profession)
+shHero::init (const char *name, shProfession *profession)
 {
     int x = 1;
     int y = 1;
     
     mIlk = findAMonsterIlk ("earthling");
-    strncpy (mName, name, 14);
+    strncpy (mName, name, HERO_NAME_LENGTH);
+    mName[HERO_NAME_LENGTH] = 0;
     mCLevel = 1;
     mBAB = 0;
     mInateResistances[kMagnetic] = 100;
@@ -2181,7 +2505,7 @@ shHero::init (char *name, shProfession *profession)
     computeAC ();
 
     mScore = 0;
-
+    mSkillPoints = 0;
     mXP = 0;
 
     initGlyph (&mGlyph, kSymHero, kWhite, 0);
